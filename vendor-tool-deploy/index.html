@@ -176,6 +176,17 @@ tr:hover td{background:var(--surface2)}
   <div class="spinner" style="width:28px;height:28px;border-color:var(--border);border-top-color:var(--accent)"></div>
   <div style="color:var(--muted);font-size:.85rem">Caricamento...</div>
 </div>
+<script>
+  // Fallback: se init() si blocca, dopo 6s mostra login
+  setTimeout(function(){
+    var lo=document.getElementById('loading-overlay');
+    var li=document.getElementById('login-overlay');
+    if(lo&&!lo.classList.contains('hidden')){
+      lo.classList.add('hidden');
+      if(li) li.classList.remove('hidden');
+    }
+  },6000);
+</script>
 
 <!-- LOGIN -->
 <div id="login-overlay" class="hidden">
@@ -2240,13 +2251,4 @@ const DF_SESSION_KEY='df_vendor_session_v1';
 const SESSION_DAYS=30;
 
 function saveSession(data){
-  if(!document.getElementById('login-remember')?.checked)return;
-  const exp=Date.now()+(SESSION_DAYS*24*60*60*1000);
-  try{localStorage.setItem(DF_SESSION_KEY,JSON.stringify({...data,_localExp:exp}));}catch(e){}
-}
-function loadSession(){
-  try{
-    const raw=localStorage.getItem(DF_SESSION_KEY);
-    if(!raw)return null;
-    const d=JSON.parse(raw);
-    if(!d._localExp||Date.now(
+  if(!document.getElementById('l
