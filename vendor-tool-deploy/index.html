@@ -694,7 +694,7 @@ tr:hover td{background:var(--surface2)}
 // ============================================================
 const SUPABASE_URL = 'https://vylcnyjneierhqjdjvin.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5bGNueWpuZWllcmhxamRqdmluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzODA5NDIsImV4cCI6MjA5Nzk1Njk0Mn0.cAdIM--q6h8st8HuK_0r6IcgenzFkKsNq-PdUIzPMPE';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const sb = (typeof supabase !== 'undefined') ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
 // ============================================================
 // HMAC AUTH — verifica server-side via Netlify Function
@@ -2249,4 +2249,4 @@ function loadSession(){
     const raw=localStorage.getItem(DF_SESSION_KEY);
     if(!raw)return null;
     const d=JSON.parse(raw);
-    if(!d._localExp||Date.now()>d._localExp){localStorage.removeItem(DF_S
+    if(!d._localExp||Date.now(
