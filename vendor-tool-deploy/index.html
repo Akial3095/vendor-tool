@@ -9,9 +9,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <script>
+  // Service worker temporaneamente disabilitato
   if('serviceWorker' in navigator){
-    window.addEventListener('load',()=>{
-      navigator.serviceWorker.register('/sw.js').catch(()=>{});
+    navigator.serviceWorker.getRegistrations().then(regs=>{
+      for(const r of regs) r.unregister();
     });
   }
 </script>
@@ -2248,5 +2249,4 @@ function loadSession(){
     const raw=localStorage.getItem(DF_SESSION_KEY);
     if(!raw)return null;
     const d=JSON.parse(raw);
-    if(!d._localExp||Date.now()>d._localExp){localStorage.removeItem(DF_SESSION_KEY);return null;}
-    // Controlla anch
+    if(!d._localExp||Date.now()>d._localExp){localStorage.removeItem(DF_S
