@@ -1,0 +1,18 @@
+{
+  "name": "Dark Forge Vendor Manager",
+  "short_name": "DF Vendor",
+  "description": "Gestione inventario e prezzi per vendor Dark Forge",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAF9F6",
+  "theme_color": "#CF6A2E",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "https://fairydndice.com/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon",
+      "purpose": "any maskable"
+    }
+  ]
+}

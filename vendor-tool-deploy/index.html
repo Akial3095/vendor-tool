@@ -1,0 +1,2252 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dark Forge — Vendor Manager</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#CF6A2E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<script>
+  if('serviceWorker' in navigator){
+    window.addEventListener('load',()=>{
+      navigator.serviceWorker.register('/sw.js').catch(()=>{});
+    });
+  }
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#FAF9F6;--surface:#FFFFFF;--surface2:#F5F3F0;--border:#E8E2D8;
+  --accent:#CF6A2E;--accent2:#B85A20;--green:#2D8653;--red:#C0392B;
+  --gold:#B8860B;--blue:#2563EB;--text:#1C1917;--muted:#78716C;
+  --radius:8px;--shadow:0 1px 4px rgba(0,0,0,.08);
+  --mono:Consolas,Menlo,Monaco,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;font-size:14px}
+
+/* LOGIN */
+#login-overlay{position:fixed;inset:0;z-index:10000;background:var(--bg);display:flex;align-items:center;justify-content:center}
+#login-overlay.hidden{display:none}
+.login-card{width:420px;max-width:95vw;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:36px 32px;box-shadow:0 4px 24px rgba(0,0,0,.1)}
+.login-logo{text-align:center;font-size:1.1rem;font-weight:800;color:var(--text);letter-spacing:.02em;margin-bottom:4px}
+.login-subtitle{text-align:center;color:var(--muted);font-size:.82rem;margin-bottom:24px}
+.login-error{background:rgba(192,57,43,.07);border-left:3px solid var(--red);color:var(--red);padding:9px 12px;font-size:.8rem;margin-bottom:12px;display:none;border-radius:4px}
+.login-error.visible{display:block}
+.btn-login{width:100%;padding:12px 16px;border-radius:8px;font-size:.9rem;font-weight:700;background:var(--accent);color:white;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:background .15s}
+.btn-login:hover{background:var(--accent2)}
+.btn-login:disabled{opacity:.5;cursor:not-allowed}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:white;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* HEADER */
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 20px;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow)}
+.logo{font-size:.9rem;font-weight:700;color:var(--text);letter-spacing:.02em}
+.logo span{font-weight:400;color:var(--muted)}
+.header-stats{margin-left:auto;display:flex;gap:20px;align-items:center}
+.hstat{text-align:right}
+.hstat-val{font-size:.95rem;font-weight:700;color:var(--text);font-family:var(--mono)}
+.hstat-lbl{font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+
+/* NAV */
+nav{background:var(--surface);border-bottom:1px solid var(--border);display:flex;padding:0 20px;gap:2px}
+.tab{padding:10px 14px;cursor:pointer;font-size:.78rem;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;transition:color .15s;user-select:none;letter-spacing:.02em;white-space:nowrap}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab .badge{background:var(--accent);color:white;font-size:.6rem;border-radius:20px;padding:1px 5px;margin-left:4px;font-family:var(--mono)}
+
+/* LAYOUT */
+.page{display:none;padding:24px;max-width:1400px;margin:0 auto}
+.page.active{display:block}
+.two-col{display:grid;grid-template-columns:1fr 380px;gap:20px}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+
+/* CARDS */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}
+.card-title{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:14px}
+
+/* FORMS */
+input,select,textarea{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 11px;border-radius:7px;font-size:.85rem;width:100%;outline:none;transition:border-color .15s}
+input:focus,select:focus{border-color:var(--accent);background:var(--surface)}
+label{font-size:.72rem;color:var(--muted);margin-bottom:4px;display:block;font-weight:600;letter-spacing:.02em}
+.form-row{margin-bottom:12px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+/* BUTTONS */
+button{cursor:pointer;border:none;border-radius:7px;font-weight:600;font-size:.82rem;padding:8px 14px;transition:all .12s}
+.btn-primary{background:var(--accent);color:white}
+.btn-primary:hover{background:var(--accent2)}
+.btn-success{background:transparent;border:1px solid var(--green);color:var(--green)}
+.btn-success:hover{background:rgba(45,134,83,.1)}
+.btn-danger{background:transparent;border:1px solid var(--border);color:var(--red)}
+.btn-danger:hover{border-color:var(--red)}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--muted)}
+.btn-outline:hover{border-color:var(--text);color:var(--text)}
+.btn-sm{padding:5px 10px;font-size:.72rem}
+.btn-gold{background:transparent;border:1px solid var(--gold);color:var(--gold)}
+.btn-gold:hover{background:rgba(184,134,11,.1)}
+
+/* SEARCH RESULTS */
+.card-result{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:6px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:border-color .15s}
+.card-result:hover{border-color:var(--accent)}
+.card-art{width:44px;height:62px;border-radius:4px;background:var(--surface);border:1px solid var(--border);overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.card-art img{width:100%;height:100%;object-fit:cover}
+.card-name{font-weight:700;font-size:.95rem}
+.card-meta{font-size:.75rem;color:var(--muted);margin-top:2px}
+.foil-badge{color:var(--gold);font-size:.65rem;font-weight:700;padding:0 4px;font-family:var(--mono)}
+.card-prices{display:flex;gap:10px;align-items:center}
+.price-block{text-align:center}
+.price-val{font-size:.9rem;font-weight:700}
+.price-src{font-size:.65rem;color:var(--muted);text-transform:uppercase}
+
+/* CART */
+.cart-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.cart-item:last-child{border-bottom:none}
+.cart-item-name{flex:1;font-size:.85rem;font-weight:600}
+.cart-price-input{width:80px;text-align:right}
+.cart-total{font-size:1.4rem;font-weight:800;color:var(--green)}
+
+/* TABLE */
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{text-align:left;padding:10px 12px;color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border);font-weight:700}
+td{padding:10px 12px;border-bottom:1px solid var(--border)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--surface2)}
+
+/* TAGS */
+.tag{display:inline-block;padding:2px 8px;border-radius:20px;font-size:.7rem;font-weight:700}
+.tag-green{background:rgba(45,134,83,.12);color:var(--green)}
+.tag-red{background:rgba(192,57,43,.12);color:var(--red)}
+.tag-blue{background:rgba(37,99,235,.12);color:var(--blue)}
+.tag-gold{background:rgba(184,134,11,.12);color:var(--gold)}
+.tag-muted{background:var(--surface2);color:var(--muted);border:1px solid var(--border)}
+
+/* INVENTORY */
+.inv-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow)}
+.inv-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
+.inv-qty{font-size:1.8rem;font-weight:800;color:var(--accent)}
+
+/* LISTING */
+.listing-item{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px}
+.platform-badge{padding:3px 9px;border-radius:5px;font-size:.7rem;font-weight:800;color:var(--muted);border:1px solid var(--border);font-family:var(--mono)}
+
+/* MISC */
+.stat-big{font-size:2rem;font-weight:800}
+.stat-sub{font-size:.8rem;color:var(--muted);margin-top:4px}
+.search-wrap{position:relative}
+.search-wrap input{padding-left:38px}
+.search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:.9rem;pointer-events:none}
+.empty{text-align:center;padding:40px 20px;color:var(--muted)}
+.empty-icon{font-size:2.5rem;margin-bottom:10px}
+.filter-bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.filter-bar input,.filter-bar select{width:auto}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:999;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;width:460px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.15)}
+.modal-title{font-size:1rem;font-weight:700;margin-bottom:18px}
+.modal-actions{display:flex;gap:10px;margin-top:20px;justify-content:flex-end}
+
+/* TOAST */
+.toast{position:fixed;bottom:20px;right:20px;background:var(--text);color:white;padding:10px 16px;border-radius:8px;font-size:.82rem;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:9999;transform:translateY(80px);opacity:0;transition:all .25s;max-width:320px}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.error{background:var(--red)}
+.toast.ok{background:var(--green)}
+
+/* SAVE DOT */
+.save-dot{width:7px;height:7px;border-radius:50%;background:var(--green);opacity:0;transition:opacity .4s;margin-left:4px}
+.save-dot.show{opacity:1}
+
+/* LOADING OVERLAY */
+#loading-overlay{position:fixed;inset:0;background:var(--bg);z-index:9998;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px}
+#loading-overlay.hidden{display:none}
+
+@media(max-width:900px){.two-col{grid-template-columns:1fr}.three-col{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.three-col{grid-template-columns:1fr}.header-stats{gap:10px}.hstat-lbl{display:none}}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading-overlay">
+  <div class="spinner" style="width:28px;height:28px;border-color:var(--border);border-top-color:var(--accent)"></div>
+  <div style="color:var(--muted);font-size:.85rem">Caricamento...</div>
+</div>
+
+<!-- LOGIN -->
+<div id="login-overlay" class="hidden">
+  <div class="login-card">
+    <div style="text-align:center;margin-bottom:16px">
+      <div style="font-size:2rem">&#9919;</div>
+    </div>
+    <div class="login-logo">Dark Forge</div>
+
+    <!-- Toggle Accedi / Registrati -->
+    <div style="display:flex;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px;margin-bottom:20px;gap:3px">
+      <button id="tab-login-btn" onclick="showLoginTab('login')" style="flex:1;border:none;border-radius:6px;padding:7px;font-size:.8rem;font-weight:700;background:var(--accent);color:white;transition:all .15s">Accedi</button>
+      <button id="tab-signup-btn" onclick="showLoginTab('signup')" style="flex:1;border:none;border-radius:6px;padding:7px;font-size:.8rem;font-weight:600;background:transparent;color:var(--muted);transition:all .15s">Registrati</button>
+    </div>
+
+    <div class="login-error" id="login-error"></div>
+
+    <!-- FORM ACCEDI -->
+    <div id="form-login">
+      <div class="login-subtitle" style="margin-bottom:16px">Accedi con la tua Vendor Key</div>
+      <div class="form-row">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="tua@email.com" autocomplete="email">
+      </div>
+      <div class="form-row">
+        <label>Vendor Key</label>
+        <input type="password" id="login-token" placeholder="Incolla la tua Vendor Key..." autocomplete="off" onkeydown="if(event.key==='Enter')submitLogin()">
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+        <input type="checkbox" id="login-remember" checked style="width:auto;accent-color:var(--accent)">
+        <label for="login-remember" style="margin:0;cursor:pointer;font-size:.78rem;color:var(--muted)">Ricordami (30 giorni)</label>
+      </div>
+      <button class="btn-login" id="login-btn" onclick="submitLogin()">Accedi</button>
+      <div style="margin-top:12px;text-align:center">
+        <button onclick="loginTestVendor()" style="background:none;border:none;color:var(--muted);font-size:.72rem;cursor:pointer;text-decoration:underline;padding:0">Modalità demo</button>
+      </div>
+    </div>
+
+    <!-- FORM REGISTRATI -->
+    <div id="form-signup" style="display:none">
+      <div class="login-subtitle" style="margin-bottom:16px">Crea il tuo account vendor — gratuito, sempre</div>
+      <div class="form-row">
+        <label>Email *</label>
+        <input type="email" id="signup-email" placeholder="tua@email.com" autocomplete="email">
+      </div>
+      <div class="form-row">
+        <label>Nome negozio *</label>
+        <input type="text" id="signup-shop" placeholder="Es. La Contea Cards" autocomplete="organization">
+      </div>
+      <div class="form-row">
+        <label>Città</label>
+        <input type="text" id="signup-city" placeholder="Es. Milano">
+      </div>
+      <!-- Box chiave generata (hidden finché non arriva) -->
+      <div id="signup-key-box" style="display:none;background:rgba(45,134,83,.07);border:1px solid rgba(45,134,83,.3);border-radius:8px;padding:14px;margin-bottom:14px">
+        <div style="font-size:.72rem;font-weight:700;color:var(--green);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">✓ Account creato — salva la tua Vendor Key</div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="text" id="signup-key-value" readonly style="font-family:var(--mono);font-size:.7rem;background:var(--surface);flex:1">
+          <button onclick="copySignupKey()" class="btn-success btn-sm" style="white-space:nowrap">Copia</button>
+        </div>
+        <div style="font-size:.72rem;color:var(--muted);margin-top:6px">Conservala — serve per accedere al tool. Potrai sempre rigenararla qui.</div>
+      </div>
+      <button class="btn-login" id="signup-btn" onclick="submitSignup()">Crea account e ottieni la chiave</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-shell" style="display:none">
+<header>
+  <div style="font-size:1.3rem">&#9919;</div>
+  <div class="logo">FairydnDice<span> Manager</span></div>
+  <div style="font-size:.68rem;color:var(--muted);letter-spacing:.06em;text-transform:uppercase">Vendor Manager</div>
+  <div class="save-dot" id="save-dot"></div>
+  <span id="offline-badge" style="display:none;font-size:.7rem;background:#fff3cd;color:#b8860b;border:1px solid #f0c040;border-radius:12px;padding:2px 8px;cursor:pointer" onclick="syncOfflineQueue()" title="Clicca per sincronizzare"></span>
+  <button onclick="openTutorial()" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:50%;width:26px;height:26px;font-size:.8rem;font-weight:700;cursor:pointer;flex-shrink:0" title="Guida / Tutorial">?</button>
+  <div class="header-stats">
+    <div class="hstat"><div class="hstat-val" id="stat-vendite-oggi">0.00</div><div class="hstat-lbl">Vendite oggi (€)</div></div>
+    <div class="hstat"><div class="hstat-val" id="stat-carte-inv">0</div><div class="hstat-lbl">Carte in stock</div></div>
+    <div class="hstat"><div class="hstat-val" id="stat-listing">0</div><div class="hstat-lbl">Listing attivi</div></div>
+    <div class="hstat"><div class="hstat-val" id="stat-wishlist-match">0</div><div class="hstat-lbl">Wishlist match</div></div>
+    <div class="hstat" style="cursor:pointer" onclick="showTabDirect('darkforge')">
+      <div style="display:flex;align-items:center;gap:5px">
+        <div style="width:7px;height:7px;border-radius:50%;background:var(--green)"></div>
+        <div class="hstat-val" style="color:var(--accent);font-size:.82rem" id="df-header-name">Dark Forge</div>
+      </div>
+      <div class="hstat-lbl">Connesso</div>
+    </div>
+    <button class="btn-outline btn-sm" id="df-logout-btn" style="display:none" onclick="logout()">Logout</button>
+  </div>
+</header>
+
+<nav>
+  <div class="tab active" onclick="showTab('ricerca',event)">Prezzi</div>
+  <div class="tab" onclick="showTab('cassa',event)">Cassa <span class="badge" id="cart-badge" style="display:none">0</span></div>
+  <div class="tab" onclick="showTab('inventario',event)">Inventario</div>
+  <div class="tab" onclick="showTab('storico',event)">Storico</div>
+  <div class="tab" onclick="showTab('listing',event)">Listing</div>
+  <div class="tab" onclick="showTab('wishlist',event)">Wishlist <span class="badge" id="wishlist-badge" style="display:none">0</span></div>
+  <div class="tab" onclick="showTab('import',event)">Import</div>
+  <div class="tab" onclick="showTab('darkforge',event)">Dark Forge</div>
+</nav>
+
+<!-- PREZZI -->
+<!-- BANNER DARK FORGE — visibile finché il vendor non è registrato su forge -->
+<div id="darkforge-banner" style="display:none;background:linear-gradient(135deg,rgba(207,106,46,.12),rgba(184,134,11,.08));border-bottom:2px solid var(--accent);padding:12px 20px;align-items:center;gap:14px;flex-wrap:wrap">
+  <div style="font-size:1.2rem">🔥</div>
+  <div style="flex:1;min-width:220px">
+    <div style="font-weight:700;font-size:.88rem;margin-bottom:3px">Il tuo negozio non è ancora visibile su Dark Forge.</div>
+    <div style="font-size:.78rem;color:var(--muted);line-height:1.5">
+      I giocatori nella tua zona non possono trovarti né vedere il tuo catalogo.
+      <strong style="color:var(--text)"> Registrati su forge.fairydndice.com</strong>, crea un account, vai su <em>Mio Negozio</em> e richiedi l'accesso Vendor — l'attivazione è manuale e gratuita.
+    </div>
+  </div>
+  <a href="https://forge.fairydndice.com" target="_blank" style="background:var(--accent);color:white;border:none;border-radius:7px;padding:9px 18px;font-size:.82rem;font-weight:700;text-decoration:none;white-space:nowrap">
+    Vai su Dark Forge →
+  </a>
+</div>
+
+<div class="page active" id="page-ricerca">
+  <div class="two-col">
+    <div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Cerca Carta</div>
+        <div class="form-row" style="margin-bottom:12px">
+          <div style="display:flex;gap:8px">
+            <button id="tcg-btn-mtg" class="btn-primary" onclick="setTcg('mtg')" style="flex:1;padding:8px">🃏 MTG</button>
+            <button id="tcg-btn-pokemon" class="btn-outline" onclick="setTcg('pokemon')" style="flex:1;padding:8px">⚡ Pokémon</button>
+          </div>
+        </div>
+        <div class="form-row"><div class="search-wrap"><span class="search-icon">&#128269;</span>
+          <input type="text" id="search-input" placeholder="Nome carta (es. Lightning Bolt, Pikachu...)" oninput="debounceSearch()" onkeydown="if(event.key==='Enter')searchCards()">
+        </div></div>
+        <div class="form-grid">
+          <div class="form-row"><label>Tipo</label><select id="filter-foil" onchange="filterResults()"><option value="all">Tutti</option><option value="normal">Normal</option><option value="foil">Foil</option></select></div>
+          <div class="form-row"><label>Edizione</label><select id="filter-set" onchange="filterResults()"><option value="all">Tutte le edizioni</option></select></div>
+          <div class="form-row"><label>Condizione</label><select id="filter-cond"><option value="NM">Near Mint (NM)</option><option value="EX">Excellent (EX)</option><option value="VG">Very Good (VG)</option><option value="GD">Good (GD)</option><option value="LP">Lightly Played (LP)</option><option value="PL">Played (PL)</option></select></div>
+          <div class="form-row"><label>Lingua</label><select id="filter-lang"><option value="IT">Italiano</option><option value="EN">English</option><option value="JP">Japanese</option><option value="DE">Deutsch</option><option value="FR">Français</option></select></div>
+        </div>
+      </div>
+      <div id="search-results"><div class="empty"><div class="empty-icon">&#127183;</div><div>Cerca una carta per vedere i prezzi di mercato</div></div></div>
+    </div>
+    <div>
+      <div class="card" id="price-panel" style="display:none">
+        <div class="card-title">Analisi Prezzi</div>
+        <div id="selected-card-info" style="margin-bottom:16px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+          <div class="card" style="padding:12px;background:var(--surface2)">
+            <div style="font-size:.68rem;color:var(--muted);font-weight:700;margin-bottom:4px">CARDTRADER</div>
+            <div id="pp-ct" style="font-size:1.4rem;font-weight:800;color:var(--accent)">-</div>
+            <div style="font-size:.7rem;color:var(--muted)" id="pp-ct-range"></div>
+          </div>
+          <div class="card" style="padding:12px;background:var(--surface2)">
+            <div style="font-size:.68rem;color:var(--muted);font-weight:700;margin-bottom:4px">CARDMARKET</div>
+            <div id="pp-mkm" style="font-size:1.4rem;font-weight:800;color:var(--blue)">-</div>
+            <div style="font-size:.7rem;color:var(--muted)" id="pp-mkm-range"></div>
+          </div>
+        </div>
+        <div style="background:rgba(45,134,83,.07);border:1px solid rgba(45,134,83,.2);border-radius:8px;padding:14px;text-align:center;margin-bottom:16px">
+          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Prezzo Medio Mercato</div>
+          <div id="pp-avg" style="font-size:2rem;font-weight:800;color:var(--green)">-</div>
+          <div style="font-size:.72rem;color:var(--muted)" id="pp-trend"></div>
+        </div>
+        <div class="form-row"><label>Prezzo di vendita suggerito</label><input type="number" id="sell-price" step="0.01" min="0" placeholder="0.00"></div>
+        <button class="btn-primary" style="width:100%" onclick="addToCart()">+ Aggiungi al carrello</button>
+        <button class="btn-outline" style="width:100%;margin-top:8px" onclick="addToInventory()">Aggiungi all'inventario</button>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <div class="card-title">Calcolo rapido margine</div>
+        <div class="form-row"><label>Prezzo acquisto (EUR)</label><input type="number" id="margin-buy" placeholder="0.00" step="0.01" oninput="calcMargin()"></div>
+        <div class="form-row"><label>Prezzo vendita (EUR)</label><input type="number" id="margin-sell" placeholder="0.00" step="0.01" oninput="calcMargin()"></div>
+        <div id="margin-result" style="font-size:.85rem;color:var(--muted);text-align:center;padding:8px">Inserisci i prezzi per calcolare il margine</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CASSA -->
+<div class="page" id="page-cassa">
+  <div class="two-col">
+    <div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Cerca carta da aggiungere</div>
+        <div class="search-wrap" style="margin-bottom:10px"><span class="search-icon">&#128269;</span>
+          <input type="text" id="cassa-search" placeholder="Nome carta..." oninput="debounceCassaSearch()" onkeydown="if(event.key==='Enter')cassaSearch()">
+        </div>
+        <div id="cassa-results"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Acquisto carte (da cliente)</div>
+        <div class="form-grid">
+          <div class="form-row"><label>Nome carta</label><input type="text" id="buy-name" placeholder="Nome carta"></div>
+          <div class="form-row"><label>Edizione</label><input type="text" id="buy-set" placeholder="Es. M21, LEA..."></div>
+          <div class="form-row"><label>Condizione</label><select id="buy-cond"><option>NM</option><option>EX</option><option>VG</option><option>GD</option><option>LP</option><option>PL</option></select></div>
+          <div class="form-row"><label>Foil</label><select id="buy-foil"><option value="no">No</option><option value="si">Sì</option></select></div>
+          <div class="form-row"><label>Prezzo acquisto (EUR)</label><input type="number" id="buy-price" step="0.01" placeholder="0.00"></div>
+          <div class="form-row"><label>Quantità</label><input type="number" id="buy-qty" value="1" min="1"></div>
+        </div>
+        <button class="btn-gold" onclick="registerBuy()" style="width:100%">Registra Acquisto</button>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <div class="card-title">Carrello vendita</div>
+        <div id="cart-items"><div class="empty" style="padding:24px 0"><div class="empty-icon" style="font-size:2rem">&#128722;</div><div>Carrello vuoto</div></div></div>
+        <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+            <span style="font-weight:700;color:var(--muted)">TOTALE</span>
+            <span class="cart-total" id="cart-total">EUR 0.00</span>
+          </div>
+          <div class="form-row"><label>Metodo di pagamento</label>
+            <select id="payment-method"><option value="contanti">Contanti</option><option value="carta">Carta/Bancomat</option><option value="credito">Credito negozio</option><option value="permuta">Permuta</option></select>
+          </div>
+          <div class="form-row"><label>Note</label><input type="text" id="sale-note" placeholder="Es. cliente abituale, sconto..."></div>
+          <button class="btn-success" style="width:100%;padding:13px;font-size:.95rem" onclick="completeSale()">Completa Vendita</button>
+          <button class="btn-outline" style="width:100%;margin-top:8px" onclick="clearCart()">Svuota carrello</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- INVENTARIO -->
+<div class="page" id="page-inventario">
+  <div class="card" style="margin-bottom:16px">
+    <div class="filter-bar">
+      <div style="display:flex;gap:6px">
+        <button id="inv-tcg-all" class="btn-primary btn-sm" onclick="setInvTcg('all')">Tutti</button>
+        <button id="inv-tcg-mtg" class="btn-outline btn-sm" onclick="setInvTcg('mtg')">🃏 MTG</button>
+        <button id="inv-tcg-pokemon" class="btn-outline btn-sm" onclick="setInvTcg('pokemon')">⚡ Pokémon</button>
+      </div>
+      <div class="search-wrap" style="flex:1;min-width:200px"><span class="search-icon">&#128269;</span>
+        <input type="text" id="inv-filter" placeholder="Filtra inventario..." oninput="renderInventory()">
+      </div>
+      <select id="inv-filter-foil" onchange="renderInventory()" style="width:auto"><option value="all">Tutti i tipi</option><option value="normal">Normal</option><option value="foil">Foil</option></select>
+      <button class="btn-primary btn-sm" onclick="openAddInventoryModal()">+ Aggiungi carta</button>
+      <button class="btn-outline btn-sm" onclick="exportInventoryCSV()">Esporta CSV</button>
+      <button class="btn-danger btn-sm" onclick="confirmClearInventory()">🗑 Svuota tutto</button>
+    </div>
+  </div>
+  <div id="scryfall-enrich-bar" style="display:none;background:rgba(37,99,235,.07);border:1px solid rgba(37,99,235,.2);border-radius:8px;padding:12px 16px;margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <div class="spinner" style="border-color:rgba(37,99,235,.3);border-top-color:#2563EB"></div>
+      <span id="scryfall-enrich-label" style="font-size:.82rem;font-weight:600;color:#2563EB">Arricchimento Scryfall in corso...</span>
+    </div>
+    <div style="background:rgba(37,99,235,.15);border-radius:4px;height:6px;overflow:hidden">
+      <div id="scryfall-enrich-fill" style="height:100%;background:#2563EB;width:0%;transition:width .3s"></div>
+    </div>
+  </div>
+  <div id="inventory-grid"></div>
+</div>
+
+<!-- STORICO -->
+<div class="page" id="page-storico">
+  <div class="three-col" style="margin-bottom:20px">
+    <div class="card"><div class="card-title">Vendite Totali</div><div class="stat-big" id="stat-tot-vendite" style="color:var(--green)">EUR 0.00</div><div class="stat-sub" id="stat-num-vendite">0 transazioni</div></div>
+    <div class="card"><div class="card-title">Acquisti Totali</div><div class="stat-big" id="stat-tot-acquisti" style="color:var(--gold)">EUR 0.00</div><div class="stat-sub" id="stat-num-acquisti">0 transazioni</div></div>
+    <div class="card"><div class="card-title">Margine Netto</div><div class="stat-big" id="stat-margine" style="color:var(--blue)">EUR 0.00</div><div class="stat-sub">vendite - acquisti</div></div>
+  </div>
+  <div class="card">
+    <div class="filter-bar">
+      <input type="text" id="storico-filter" placeholder="Cerca nel storico..." oninput="renderStorico()" style="max-width:280px">
+      <select id="storico-type" onchange="renderStorico()" style="width:auto"><option value="all">Tutti</option><option value="vendita">Solo vendite</option><option value="acquisto">Solo acquisti</option></select>
+      <button class="btn-outline btn-sm" onclick="exportStoricoCSV()">Esporta CSV</button>
+    </div>
+    <div id="storico-table"></div>
+  </div>
+</div>
+
+<!-- LISTING -->
+<div class="page" id="page-listing">
+  <div class="two-col" style="align-items:start;margin-bottom:16px">
+    <!-- Filtri + lista -->
+    <div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="filter-bar">
+          <input type="text" id="listing-filter" placeholder="Filtra listing..." oninput="renderListing()" style="max-width:240px">
+          <select id="listing-platform" onchange="renderListing()" style="width:auto"><option value="all">Tutte le piattaforme</option><option value="ct">CardTrader</option><option value="mkm">CardMarket</option></select>
+          <select id="listing-status" onchange="renderListing()" style="width:auto"><option value="all">Tutti gli stati</option><option value="attivo">Attivi</option><option value="rimosso">Rimossi</option></select>
+        </div>
+      </div>
+      <div id="listing-items"></div>
+    </div>
+    <!-- Pannello sync -->
+    <div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Sincronizza Cardmarket</div>
+        <div style="font-size:.8rem;color:var(--muted);margin-bottom:12px">Esporta inventario MTG in formato CSV compatibile con Cardmarket (MKM). Caricalo manualmente nella sezione Stock del tuo account MKM.</div>
+        <button class="btn-primary" style="width:100%" onclick="exportMkmCsv()">⬇ Scarica CSV per MKM</button>
+      </div>
+      <div class="card">
+        <div class="card-title">Sincronizza CardTrader</div>
+        <div style="font-size:.8rem;color:var(--muted);margin-bottom:12px">Inserisci il tuo Bearer Token CardTrader per sincronizzare l'inventario direttamente. Trovi il token in <b>CardTrader → Account → API</b>.</div>
+        <div class="form-row">
+          <label>Bearer Token CT</label>
+          <input type="password" id="ct-token-input" placeholder="eyJ..." oninput="saveCTToken()">
+        </div>
+        <div id="ct-sync-status" style="font-size:.78rem;color:var(--muted);margin-bottom:10px"></div>
+        <button class="btn-primary" style="width:100%;margin-bottom:8px" onclick="syncToCardtrader()">↑ Sincronizza inventario su CT</button>
+        <button class="btn-outline" style="width:100%;font-size:.78rem" onclick="exportCtCsv()">⬇ Scarica CSV (alternativa)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- WISHLIST -->
+<div class="page" id="page-wishlist">
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div>
+        <div class="card-title" style="margin-bottom:2px">Wishlist Clienti Dark Forge</div>
+        <div style="font-size:.8rem;color:var(--muted)">Verde = hai in stock.</div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <input type="text" id="wl-filter" placeholder="Filtra per carta o utente..." oninput="renderWishlist()" style="max-width:220px">
+        <select id="wl-filter-status" onchange="renderWishlist()" style="width:auto"><option value="all">Tutte</option><option value="match">Solo match</option><option value="nomatch">Solo mancanti</option></select>
+        <button class="btn-outline btn-sm" onclick="notifyAllAvailable()">Notifica disponibili</button>
+      </div>
+    </div>
+  </div>
+  <div class="three-col" style="margin-bottom:20px">
+    <div class="card" style="text-align:center"><div class="card-title">Richieste totali</div><div class="stat-big" id="wl-stat-total">0</div><div class="stat-sub">carte in wishlist</div></div>
+    <div class="card" style="text-align:center"><div class="card-title">Hai in stock</div><div class="stat-big" id="wl-stat-match" style="color:var(--green)">0</div><div class="stat-sub">vendibili subito</div></div>
+    <div class="card" style="text-align:center"><div class="card-title">Valore potenziale</div><div class="stat-big" id="wl-stat-value" style="color:var(--gold)">EUR 0</div><div class="stat-sub">se vendi tutto il match</div></div>
+  </div>
+  <div id="wishlist-container"></div>
+</div>
+
+<!-- IMPORT -->
+<div class="page" id="page-import">
+  <div class="two-col" style="align-items:start">
+    <div>
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <div style="font-size:1.3rem">&#11035;</div>
+          <div><div style="font-weight:700;font-size:.95rem">CardTrader — Import via API</div><div style="font-size:.78rem;color:var(--muted)">Importa il tuo stock con API key</div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:10px 12px;font-size:.78rem;color:var(--muted);margin-bottom:14px">
+          CardTrader → Il mio account → API → Genera token
+        </div>
+        <div class="form-row"><label>API Token CardTrader</label><input type="password" id="ct-api-key" placeholder="Bearer token..."></div>
+        <div class="form-row"><label>Gioco</label>
+          <select id="ct-game"><option value="1">Magic: The Gathering</option><option value="3">Pokemon</option><option value="6">Yu-Gi-Oh!</option><option value="9">One Piece</option><option value="14">Lorcana</option></select>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="btn-primary" style="flex:1" onclick="importFromCT()">Importa da CardTrader</button>
+          <button class="btn-outline" onclick="testCTConnection()">Test connessione</button>
+        </div>
+        <div id="ct-status" style="margin-top:10px;font-size:.82rem;display:none"></div>
+      </div>
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <div style="font-size:1.3rem">&#128309;</div>
+          <div><div style="font-weight:700;font-size:.95rem">CardMarket — Import CSV</div><div style="font-size:.78rem;color:var(--muted)">Export CSV da CardMarket stock</div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:10px 12px;font-size:.78rem;color:var(--muted);margin-bottom:14px">
+          CardMarket → Il mio account → Offerte in vendita → Esporta CSV
+        </div>
+        <div class="form-row"><label>File CSV CardMarket</label><input type="file" id="mkm-csv-file" accept=".csv,.txt" onchange="parseMKMCsv(this)" style="padding:8px"></div>
+        <div id="mkm-status" style="margin-top:8px;font-size:.82rem;display:none"></div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <div style="font-size:1.3rem">&#128196;</div>
+          <div><div style="font-weight:700;font-size:.95rem">CSV Personalizzato</div><div style="font-size:.78rem;color:var(--muted)">Importa da qualsiasi fonte con il tuo template</div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:10px 12px;font-size:.78rem;color:var(--muted);margin-bottom:12px">
+          Compatibile con <strong>ManaBox</strong> (Name, Set code, Foil, Condition, Language, Quantity, Purchase price) e formati custom.
+        </div>
+        <div style="display:flex;gap:10px;margin-bottom:12px">
+          <button class="btn-outline btn-sm" onclick="downloadCSVTemplate()" style="flex:1">&#11015; Scarica template</button>
+        </div>
+        <div class="form-row"><label>File CSV personalizzato</label><input type="file" id="custom-csv-file" accept=".csv,.txt" onchange="parseCustomCSV(this)" style="padding:8px"></div>
+        <div id="custom-csv-status" style="margin-top:8px;font-size:.82rem;display:none"></div>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <div class="card-title">Anteprima importazione <span id="import-count" style="color:var(--accent);font-weight:800"></span></div>
+        <div id="import-preview"><div class="empty"><div class="empty-icon">&#128229;</div><div>Nessun dato da importare ancora</div></div></div>
+        <div id="import-actions" style="display:none;margin-top:14px">
+          <div style="display:flex;gap:10px">
+            <button class="btn-success" style="flex:1" onclick="confirmImport()">Importa tutto in inventario</button>
+            <button class="btn-outline" onclick="clearImportPreview()">Annulla</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DARK FORGE -->
+<div class="page" id="page-darkforge">
+  <div class="two-col">
+    <div>
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
+          <div style="width:50px;height:50px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:1.4rem">&#127978;</div>
+          <div>
+            <div style="font-weight:700;font-size:1.05rem" id="df-vendor-name">-</div>
+            <div style="font-size:.8rem;color:var(--muted)" id="df-vendor-zone">-</div>
+            <div style="display:flex;align-items:center;gap:5px;margin-top:3px">
+              <div style="width:7px;height:7px;border-radius:50%;background:var(--green)"></div>
+              <span style="font-size:.72rem;color:var(--green);font-weight:700">Profilo attivo su Dark Forge</span>
+            </div>
+          </div>
+        </div>
+        <div style="background:var(--surface2);border-radius:7px;padding:11px 13px;font-size:.82rem;color:var(--muted);border-left:3px solid var(--accent)">
+          Come vendor il tuo stock è visibile agli utenti della tua zona su Dark Forge.
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Aggiungi all'inventario Dark Forge</div>
+        <div class="search-wrap" style="margin-bottom:10px"><span class="search-icon">&#128269;</span>
+          <input type="text" id="df-inv-search" placeholder="Cerca nell'inventario MTG..." oninput="renderDFSearch()">
+        </div>
+        <div id="df-inv-results"></div>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Visibili su Dark Forge <span id="df-count" style="font-weight:400;color:var(--muted)"></span></div>
+        <div id="df-collection-list"></div>
+        <button class="btn-outline btn-sm" style="margin-top:10px;width:100%" onclick="syncCollectionDF()">↺ Forza sync</button>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Attività community — Zona tua</div>
+        <div id="df-activity-items"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Impostazioni profilo DF</div>
+        <div class="form-row"><label>Nome negozio su Dark Forge</label><input type="text" id="df-name-input"></div>
+        <div class="form-row"><label>Descrizione</label><input type="text" id="df-desc-input" placeholder="Es. Specializzati in Modern e Legacy..."></div>
+        <div class="form-row"><label>Mostra prezzi</label>
+          <select id="df-show-prices"><option value="si">Sì — visibili a tutti</option><option value="zona">Solo utenti della mia zona</option><option value="no">No — solo su richiesta</option></select>
+        </div>
+        <button class="btn-primary" style="width:100%;margin-top:8px" onclick="saveDFSettings()">Salva impostazioni</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL INVENTARIO -->
+<div class="modal-overlay" id="modal-inventory">
+  <div class="modal" style="width:520px;max-height:90vh;overflow-y:auto">
+    <div class="modal-title" id="modal-inv-title">Aggiungi carta all'inventario</div>
+
+    <!-- SCRYFALL SEARCH -->
+    <div id="modal-sf-section" style="margin-bottom:14px">
+      <label>Cerca su Scryfall</label>
+      <div class="search-wrap" style="margin-bottom:6px">
+        <span class="search-icon">&#128269;</span>
+        <input type="text" id="mi-sf-search" placeholder="Digita il nome della carta..." oninput="debounceModalSearch()" autocomplete="off">
+      </div>
+      <div id="mi-sf-results" style="max-height:180px;overflow-y:auto"></div>
+      <div id="mi-sf-selected" style="display:none;background:rgba(45,134,83,.07);border:1px solid rgba(45,134,83,.3);border-radius:7px;padding:8px 12px;margin-top:6px;display:none;align-items:center;gap:10px">
+        <img id="mi-sf-img" src="" style="width:36px;height:50px;border-radius:4px;object-fit:cover" onerror="this.style.display='none'">
+        <div><div id="mi-sf-name" style="font-weight:700;font-size:.85rem"></div><div id="mi-sf-meta" style="font-size:.72rem;color:var(--muted)"></div></div>
+        <button onclick="clearModalSfSelection()" style="margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:.9rem">✕</button>
+      </div>
+    </div>
+
+    <div style="border-top:1px solid var(--border);padding-top:14px">
+      <div class="form-row"><label>Nome carta</label><input type="text" id="mi-name" placeholder="Compilato automaticamente da Scryfall"></div>
+      <div class="form-grid">
+        <div class="form-row"><label>Edizione</label><input type="text" id="mi-set" placeholder="Es. M21, LEA..."></div>
+        <div class="form-row"><label>Quantità</label><input type="number" id="mi-qty" value="1" min="1"></div>
+        <div class="form-row"><label>Tipo</label><select id="mi-foil"><option value="normal">Normal</option><option value="foil">Foil</option></select></div>
+        <div class="form-row"><label>Condizione</label><select id="mi-cond"><option>NM</option><option>EX</option><option>VG</option><option>GD</option><option>LP</option><option>PL</option></select></div>
+        <div class="form-row"><label>Prezzo acquisto (EUR)</label><input type="number" id="mi-buy-price" step="0.01" placeholder="0.00"></div>
+        <div class="form-row"><label>Prezzo vendita (EUR)</label><input type="number" id="mi-sell-price" step="0.01" placeholder="0.00"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-outline" onclick="closeModal()">Annulla</button>
+      <button class="btn-primary" id="modal-save-btn" onclick="saveInventoryItem()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+</div><!-- /app-shell -->
+
+<!-- ============================================================ -->
+<!-- TUTORIAL MODAL                                               -->
+<!-- ============================================================ -->
+<div id="tutorial-overlay" style="display:none;position:fixed;inset:0;z-index:20000;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center">
+  <div style="background:var(--surface);border-radius:16px;width:520px;max-width:95vw;max-height:90vh;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.25);display:flex;flex-direction:column">
+    <!-- Header -->
+    <div style="background:var(--accent);padding:20px 24px;display:flex;align-items:center;justify-content:space-between">
+      <div style="color:white">
+        <div style="font-size:1rem;font-weight:800;letter-spacing:.02em" id="tut-title">Benvenuto su Dark Forge Vendor</div>
+        <div style="font-size:.75rem;opacity:.85;margin-top:2px" id="tut-step-label">Passo 1 di 8</div>
+      </div>
+      <button onclick="closeTutorial()" style="background:rgba(255,255,255,.2);border:none;color:white;width:28px;height:28px;border-radius:50%;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
+    </div>
+    <!-- Progress bar -->
+    <div style="height:3px;background:var(--border)">
+      <div id="tut-progress" style="height:100%;background:var(--accent);transition:width .3s;width:12.5%"></div>
+    </div>
+    <!-- Content -->
+    <div id="tut-content" style="padding:28px 24px;flex:1;overflow-y:auto;min-height:200px"></div>
+    <!-- Footer -->
+    <div style="padding:16px 24px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+      <button id="tut-prev" class="btn-outline" onclick="tutNav(-1)" style="visibility:hidden">← Indietro</button>
+      <div style="display:flex;gap:6px" id="tut-dots"></div>
+      <button id="tut-next" class="btn-primary" onclick="tutNav(1)">Avanti →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// SUPABASE
+// ============================================================
+const SUPABASE_URL = 'https://vylcnyjneierhqjdjvin.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5bGNueWpuZWllcmhxamRqdmluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzODA5NDIsImV4cCI6MjA5Nzk1Njk0Mn0.cAdIM--q6h8st8HuK_0r6IcgenzFkKsNq-PdUIzPMPE';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ============================================================
+// HMAC AUTH — verifica server-side via Netlify Function
+// VENDOR_SECRET non è mai nell'HTML: vive nelle env var di Netlify
+// ============================================================
+async function verifyVendorKey(email, vendorKey) {
+  try {
+    const resp = await fetch('/api/verify-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, vendorKey }),
+    });
+    if (!resp.ok) return { success: false, error: 'Errore server (' + resp.status + '). Riprova.' };
+    return await resp.json();
+  } catch (e) {
+    return { success: false, error: 'Errore di rete. Controlla la connessione.' };
+  }
+}
+
+// ============================================================
+// STATE
+// ============================================================
+let cart=[], inventory=[], transactions=[], listings=[], selectedCard=null;
+let dfSession=null, searchTimeout=null, cassaSearchTimeout=null;
+let sfCache={}, sfImgCache={};
+let activeTcg='mtg'; // 'mtg' | 'pokemon'
+const DEMO_MODE_KEY = '__demo__';
+
+// ============================================================
+// SCRYFALL API
+// ============================================================
+const SF_BASE = 'https://api.scryfall.com';
+
+async function sfSearch(query) {
+  if (!query || query.length < 2) return [];
+  const cacheKey = query.toLowerCase();
+  if (sfCache[cacheKey] && Date.now() - sfCache[cacheKey].ts < 300000)
+    return sfCache[cacheKey].data;
+  try {
+    const r = await fetch(`${SF_BASE}/cards/search?q=${encodeURIComponent(query)}&order=name&unique=prints`);
+    if (!r.ok) return [];
+    const d = await r.json();
+    sfCache[cacheKey] = {data: d.data||[], ts: Date.now()};
+    return d.data||[];
+  } catch(e) { return []; }
+}
+
+function sfPrices(card, foil) {
+  const p = card.prices || {};
+  const eur = foil ? parseFloat(p.eur_foil||0) : parseFloat(p.eur||0);
+  const usd = foil ? parseFloat(p.usd_foil||0) : parseFloat(p.usd||0);
+  const mkm = eur > 0 ? eur : (usd * 0.92);
+  const ct = mkm > 0 ? +(mkm * (Math.random() * 0.1 + 0.93)).toFixed(2) : 0;
+  const avg = mkm > 0 ? +((mkm + ct) / 2).toFixed(2) : 0;
+  return { ct: +ct.toFixed(2), mkm: +mkm.toFixed(2), avg };
+}
+
+function sfImageUrl(card) {
+  if (!card) return '';
+  if (card.image_uris) return card.image_uris.small || card.image_uris.normal || '';
+  if (card.card_faces && card.card_faces[0]?.image_uris)
+    return card.card_faces[0].image_uris.small || '';
+  return '';
+}
+
+// ============================================================
+// POKÉMON TCG API (via Netlify Function — chiave server-side)
+// ============================================================
+async function pkSearch(query) {
+  if (!query || query.length < 2) return [];
+  try {
+    const r = await fetch(`/api/search-pokemon?q=${encodeURIComponent(query)}`);
+    if (!r.ok) return [];
+    const d = await r.json();
+    return d.data || [];
+  } catch(e) { return []; }
+}
+
+function pkPrices(card) {
+  const cm  = card.cardmarket?.prices?.averageSellPrice || 0;
+  const tcp = ((card.tcgplayer?.prices?.normal?.market || card.tcgplayer?.prices?.holofoil?.market || 0) * 0.92);
+  const mkm = cm  > 0 ? +cm.toFixed(2)  : +tcp.toFixed(2);
+  const ct  = tcp > 0 ? +tcp.toFixed(2) : +cm.toFixed(2);
+  const avg = mkm > 0 || ct > 0 ? +((mkm + ct) / (mkm > 0 && ct > 0 ? 2 : 1)).toFixed(2) : 0;
+  return { ct, mkm, avg };
+}
+
+function pkImageUrl(card) {
+  return card?.images?.small || card?.images?.large || '';
+}
+
+function setTcg(tcg) {
+  activeTcg = tcg;
+  document.getElementById('tcg-btn-mtg').className     = tcg === 'mtg'     ? 'btn-primary' : 'btn-outline';
+  document.getElementById('tcg-btn-pokemon').className = tcg === 'pokemon' ? 'btn-primary' : 'btn-outline';
+  document.getElementById('tcg-btn-mtg').style.flex = '1';
+  document.getElementById('tcg-btn-mtg').style.padding = '8px';
+  document.getElementById('tcg-btn-pokemon').style.flex = '1';
+  document.getElementById('tcg-btn-pokemon').style.padding = '8px';
+  // Reset risultati
+  document.getElementById('search-input').value = '';
+  const el = document.getElementById('search-results');
+  const icon = tcg === 'pokemon' ? '⚡' : '🃏';
+  const label = tcg === 'pokemon' ? 'Cerca una carta Pokémon' : 'Cerca una carta MTG per vedere i prezzi di mercato';
+  el.innerHTML = `<div class="empty"><div class="empty-icon">${icon}</div><div>${label}</div></div>`;
+  searchResults = [];
+  document.getElementById('filter-set').innerHTML = '<option value="all">Tutte le edizioni</option>';
+  document.getElementById('price-panel').style.display = 'none';
+}
+
+// ============================================================
+// TABS
+// ============================================================
+function showTab(name, ev) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  if (ev && ev.currentTarget) ev.currentTarget.classList.add('active');
+  document.getElementById('page-'+name).classList.add('active');
+  if (name==='inventario') renderInventory();
+  if (name==='storico') renderStorico();
+  if (name==='listing') renderListing();
+  if (name==='wishlist') renderWishlist();
+  if (name==='darkforge') renderDarkForge();
+}
+function showTabDirect(name) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  const map={ricerca:'Prezzi',cassa:'Cassa',inventario:'Inventario',storico:'Storico',listing:'Listing',wishlist:'Wishlist',import:'Import',darkforge:'Dark Forge'};
+  document.querySelectorAll('.tab').forEach(t=>{if(t.textContent.trim().startsWith(map[name]||name))t.classList.add('active');});
+  if (name==='inventario') renderInventory();
+  if (name==='darkforge') renderDarkForge();
+}
+
+// ============================================================
+// SEARCH (Scryfall)
+// ============================================================
+let searchResults=[];
+function debounceSearch(){clearTimeout(searchTimeout);searchTimeout=setTimeout(searchCards,400);}
+async function searchCards(){
+  const q=document.getElementById('search-input').value.trim();
+  const el=document.getElementById('search-results');
+  if(q.length<2){el.innerHTML=`<div class="empty"><div class="empty-icon">${activeTcg==='pokemon'?'⚡':'🃏'}</div><div>Cerca una carta per vedere i prezzi di mercato</div></div>`;return;}
+  const label=activeTcg==='pokemon'?'Ricerca su PokéTCG...':'Ricerca su Scryfall...';
+  el.innerHTML=`<div class="empty"><div class="spinner" style="width:24px;height:24px;border-color:var(--border);border-top-color:var(--accent);margin:0 auto 8px"></div><div style="color:var(--muted)">${label}</div></div>`;
+  if(activeTcg==='pokemon'){
+    searchResults=await pkSearch(q);
+    const sets=[...new Set(searchResults.map(c=>c.set?.name||c.set?.id||'N/A'))];
+    const sel=document.getElementById('filter-set');
+    sel.innerHTML='<option value="all">Tutte le edizioni</option>';
+    sets.forEach(s=>sel.innerHTML+=`<option value="${escHtml(s)}">${escHtml(s)}</option>`);
+  } else {
+    searchResults=await sfSearch(q);
+    const sets=[...new Set(searchResults.map(c=>c.set.toUpperCase()))];
+    const sel=document.getElementById('filter-set');
+    sel.innerHTML='<option value="all">Tutte le edizioni</option>';
+    sets.forEach(s=>sel.innerHTML+=`<option value="${s}">${s}</option>`);
+  }
+  filterResults();
+}
+
+function filterResults(){
+  const ff=document.getElementById('filter-foil').value;
+  const sf=document.getElementById('filter-set').value;
+  const el=document.getElementById('search-results');
+  if(!searchResults.length){el.innerHTML=`<div class="empty"><div class="empty-icon">&#128269;</div><div>Nessuna carta trovata</div></div>`;return;}
+
+  // ── Pokémon ──────────────────────────────────────────────────
+  if(activeTcg==='pokemon'){
+    let filtered=searchResults.filter(c=>sf==='all'||(c.set?.name||c.set?.id||'N/A')===sf);
+    if(!filtered.length){el.innerHTML='<div class="empty"><div class="empty-icon">⚡</div><div>Nessuna carta Pokémon trovata</div></div>';return;}
+    let html='';
+    filtered.slice(0,30).forEach(card=>{
+      const p=pkPrices(card);
+      const img=pkImageUrl(card);
+      const setName=card.set?.name||card.set?.id||'N/A';
+      const meta=`${setName} · ${card.supertype||''}${card.subtypes?(' — '+card.subtypes.join(', ')):''}`;
+      const safeId=card.id.replace(/'/g,"\\'");
+      const safeName=escHtml(card.name).replace(/'/g,"\\'");
+      html+=`<div class="card-result" onclick="selectCard('${safeId}',false)">
+        <div class="card-art">${img?`<img src="${img}" alt="${escHtml(card.name)}" loading="lazy">`:'<span style="font-size:1.2rem">⚡</span>'}</div>
+        <div style="flex:1">
+          <div class="card-name">${escHtml(card.name)}</div>
+          <div class="card-meta">${escHtml(meta)}</div>
+        </div>
+        <div class="card-prices">
+          <div class="price-block"><div class="price-val" style="color:var(--accent)">€${p.ct||'-'}</div><div class="price-src">TCG</div></div>
+          <div class="price-block"><div class="price-val" style="color:var(--blue)">€${p.mkm||'-'}</div><div class="price-src">MKM</div></div>
+          <div class="price-block"><div class="price-val" style="color:var(--green)">€${p.avg||'-'}</div><div class="price-src">Media</div></div>
+        </div>
+        <button class="btn-success btn-sm" style="white-space:nowrap;margin-left:8px" onclick="event.stopPropagation();quickAddToInventory('${safeId}',false,${p.avg},${(p.avg*0.5).toFixed(2)},'${safeName}','${escHtml(setName).replace(/'/g,"\\'")}','${img}','${safeId}','pokemon')">+ Inventario</button>
+      </div>`;
+    });
+    el.innerHTML=html;
+    return;
+  }
+
+  // ── MTG (Scryfall) ────────────────────────────────────────────
+  let filtered=searchResults.filter(c=>sf==='all'||c.set.toUpperCase()===sf);
+  if(!filtered.length){el.innerHTML='<div class="empty"><div class="empty-icon">&#128269;</div><div>Nessuna carta trovata su Scryfall</div></div>';return;}
+  let html='';
+  filtered.slice(0,30).forEach(card=>{
+    const variants=[];
+    if(ff!=='foil') variants.push(false);
+    if(ff!=='normal' && (card.foil||card.nonfoil)) variants.push(true);
+    variants.forEach(isFoil=>{
+      const p=sfPrices(card,isFoil);
+      const img=sfImageUrl(card);
+      html+=`<div class="card-result" onclick="selectCard('${card.id}',${isFoil})">
+        <div class="card-art">${img?`<img src="${img}" alt="${escHtml(card.name)}" loading="lazy">`:'<span style="font-size:1.2rem">&#127183;</span>'}</div>
+        <div style="flex:1">
+          <div class="card-name">${escHtml(card.name)}${isFoil?' <span class="foil-badge">FOIL</span>':''}</div>
+          <div class="card-meta">${card.set.toUpperCase()} · ${card.type_line||''}</div>
+        </div>
+        <div class="card-prices">
+          <div class="price-block"><div class="price-val" style="color:var(--accent)">€${p.ct}</div><div class="price-src">CT</div></div>
+          <div class="price-block"><div class="price-val" style="color:var(--blue)">€${p.mkm}</div><div class="price-src">MKM</div></div>
+          <div class="price-block"><div class="price-val" style="color:var(--green)">€${p.avg}</div><div class="price-src">Media</div></div>
+        </div>
+        <button class="btn-success btn-sm" style="white-space:nowrap;margin-left:8px" onclick="event.stopPropagation();quickAddToInventory('${card.id}',${isFoil},${p.avg},${p.avg*0.5},'${escHtml(card.name).replace(/'/g,"\\'")}','${card.set.toUpperCase()}','${img}','${card.id}','mtg')">+ Inventario</button>
+      </div>`;
+    });
+  });
+  el.innerHTML=html;
+}
+
+function selectCard(cardId, foil){
+  const card=searchResults.find(c=>c.id===cardId);
+  if(!card)return;
+  const isPokemon = activeTcg==='pokemon';
+  const prices = isPokemon ? pkPrices(card) : sfPrices(card,foil);
+  const imageUri = isPokemon ? pkImageUrl(card) : sfImageUrl(card);
+  const setLabel = isPokemon ? (card.set?.name||card.set?.id||'N/A') : card.set.toUpperCase();
+  selectedCard={sfId:cardId,name:card.name,set:setLabel,foil:isPokemon?false:foil,
+    cond:document.getElementById('filter-cond').value,
+    lang:isPokemon?'EN':document.getElementById('filter-lang').value,
+    card,prices,imageUri,_tcg:isPokemon?'pokemon':'mtg'};
+  const p=selectedCard.prices;
+  document.getElementById('price-panel').style.display='block';
+  const img=selectedCard.imageUri;
+  document.getElementById('selected-card-info').innerHTML=`
+    <div style="display:flex;align-items:center;gap:12px">
+      <div class="card-art" style="width:50px;height:70px">${img?`<img src="${img}" alt="${escHtml(card.name)}" style="width:100%;height:100%;object-fit:cover">`:'<span style="font-size:1.5rem">&#127183;</span>'}</div>
+      <div><div style="font-weight:700;font-size:1rem">${escHtml(card.name)}${foil?' <span class="foil-badge">FOIL</span>':''}</div>
+      <div style="font-size:.8rem;color:var(--muted)">${card.set.toUpperCase()} · ${selectedCard.cond} · ${selectedCard.lang}</div></div>
+    </div>`;
+  document.getElementById('pp-ct').textContent='€'+p.ct;
+  document.getElementById('pp-mkm').textContent='€'+p.mkm;
+  document.getElementById('pp-avg').textContent='€'+p.avg;
+  document.getElementById('pp-trend').textContent=p.ct>p.mkm?`CT più alto di €${(p.ct-p.mkm).toFixed(2)}`:`MKM più alto di €${(p.mkm-p.ct).toFixed(2)}`;
+  document.getElementById('pp-ct-range').textContent=`Range: €${(p.ct*.9).toFixed(2)} – €${(p.ct*1.1).toFixed(2)}`;
+  document.getElementById('pp-mkm-range').textContent=`Trend 30gg: €${(p.mkm*.9).toFixed(2)} – €${(p.mkm*1.1).toFixed(2)}`;
+  document.getElementById('sell-price').value=p.avg;
+}
+
+function calcMargin(){
+  const buy=parseFloat(document.getElementById('margin-buy').value)||0;
+  const sell=parseFloat(document.getElementById('margin-sell').value)||0;
+  if(!buy&&!sell)return;
+  const profit=sell-buy,pct=buy>0?((profit/buy)*100).toFixed(1):0;
+  document.getElementById('margin-result').innerHTML=`<span style="color:${profit>=0?'var(--green)':'var(--red)'};font-size:1.1rem;font-weight:800">${profit>=0?'+':''}€${profit.toFixed(2)}</span><span style="color:var(--muted);margin-left:8px">(${pct}% margine)</span>`;
+}
+
+// ============================================================
+// CART
+// ============================================================
+function addToCart(){
+  if(!selectedCard)return;
+  const price=parseFloat(document.getElementById('sell-price').value)||selectedCard.prices.avg;
+  cart.push({...selectedCard,sellPrice:price,cartId:Date.now()});
+  renderCart();showToast(selectedCard.name+' aggiunto al carrello');updateBadge();
+}
+function removeFromCart(id){cart=cart.filter(i=>i.cartId!==id);renderCart();updateBadge();}
+function renderCart(){
+  const el=document.getElementById('cart-items');
+  if(!cart.length){el.innerHTML='<div class="empty" style="padding:24px 0"><div class="empty-icon" style="font-size:2rem">&#128722;</div><div>Carrello vuoto</div></div>';document.getElementById('cart-total').textContent='EUR 0.00';return;}
+  let html='',total=0;
+  cart.forEach(item=>{
+    total+=item.sellPrice;
+    html+=`<div class="cart-item">
+      <div class="cart-item-name">${escHtml(item.name)}${item.foil?' <span class="foil-badge">FOIL</span>':''}
+        <br><span style="font-size:.72rem;color:var(--muted)">${item.set} · ${item.cond}</span>
+      </div>
+      <input class="cart-price-input" type="number" value="${item.sellPrice}" step="0.01" min="0" onchange="updateCartPrice(${item.cartId},this.value)">
+      <button class="btn-danger btn-sm" onclick="removeFromCart(${item.cartId})">✕</button>
+    </div>`;
+  });
+  el.innerHTML=html;
+  document.getElementById('cart-total').textContent='EUR '+total.toFixed(2);
+}
+function updateCartPrice(id,v){const i=cart.find(x=>x.cartId===id);if(i){i.sellPrice=parseFloat(v)||0;renderCart();}}
+function updateBadge(){const b=document.getElementById('cart-badge');b.style.display=cart.length>0?'inline':'none';b.textContent=cart.length;}
+function clearCart(){cart=[];renderCart();updateBadge();}
+
+async function completeSale(){
+  if(!cart.length){showToast('Carrello vuoto',true);return;}
+  const total=cart.reduce((s,i)=>s+i.sellPrice,0);
+  const tx={type:'vendita',items:[...cart.map(i=>({name:i.name,set:i.set,foil:i.foil,cond:i.cond,qty:1,sellPrice:i.sellPrice}))],total,method:document.getElementById('payment-method').value,note:document.getElementById('sale-note').value,created_at:new Date().toISOString()};
+  cart.forEach(item=>removeFromInvOnSale(item.name,item.set,item.foil));
+  transactions.unshift({...tx,id:'local_'+Date.now()});
+  clearCart();document.getElementById('sale-note').value='';
+  updateStats();showToast('Vendita completata: EUR '+total.toFixed(2),'ok');
+  if(dfSession.vendorId!==DEMO_MODE_KEY) await sbInsertTransaction(tx);
+}
+function removeFromInvOnSale(name,set,foil){
+  const idx=inventory.findIndex(i=>i.card_name===name&&i.set_code===set&&i.foil===foil);
+  if(idx!==-1){
+    if(inventory[idx].qty>1){inventory[idx].qty--;sbUpdateInventoryQty(inventory[idx]);}
+    else{const removed=inventory.splice(idx,1)[0];sbDeleteInventory(removed.id);}
+  }
+  listings.filter(l=>l.card_name===name&&l.set_code===set&&l.foil===foil&&l.status==='attivo').forEach(l=>{l.status='rimosso';sbUpdateListingStatus(l);});
+}
+
+// ============================================================
+// CASSA SEARCH
+// ============================================================
+function debounceCassaSearch(){clearTimeout(cassaSearchTimeout);cassaSearchTimeout=setTimeout(cassaSearch,400);}
+async function cassaSearch(){
+  const q=document.getElementById('cassa-search').value.trim();
+  const el=document.getElementById('cassa-results');
+  if(q.length<2){el.innerHTML='';return;}
+  const results=await sfSearch(q);
+  if(!results.length){el.innerHTML='<div style="color:var(--muted);font-size:.85rem;padding:8px">Nessuna carta trovata</div>';return;}
+  let html='';
+  results.slice(0,6).forEach(card=>{
+    const p=sfPrices(card,false);
+    const img=sfImageUrl(card);
+    html+=`<div class="card-result" style="margin-bottom:6px" onclick="addCassaCard('${card.id}','${escHtml(card.name)}','${card.set.toUpperCase()}',false,${p.avg},'${img}')">
+      <div class="card-art">${img?`<img src="${img}" alt="" loading="lazy">`:'<span style="font-size:1.2rem">&#127183;</span>'}</div>
+      <div style="flex:1"><div class="card-name">${escHtml(card.name)}</div><div class="card-meta">${card.set.toUpperCase()}</div></div>
+      <div><div style="font-weight:700;color:var(--green)">€${p.avg}</div><button class="btn-primary btn-sm" style="margin-top:4px">+ Aggiungi</button></div>
+    </div>`;
+  });
+  el.innerHTML=html;
+}
+function addCassaCard(sfId,name,set,foil,price,img){
+  cart.push({sfId,name,set,foil,cond:'NM',lang:'IT',sellPrice:price,cartId:Date.now(),imageUri:img});
+  renderCart();updateBadge();
+  document.getElementById('cassa-search').value='';document.getElementById('cassa-results').innerHTML='';
+  showToast(name+' aggiunto al carrello');
+}
+
+// ============================================================
+// ACQUISTO
+// ============================================================
+async function registerBuy(){
+  const name=document.getElementById('buy-name').value.trim();
+  if(!name){showToast('Inserisci il nome della carta',true);return;}
+  const set=document.getElementById('buy-set').value.trim()||'N/A';
+  const price=parseFloat(document.getElementById('buy-price').value)||0;
+  const qty=parseInt(document.getElementById('buy-qty').value)||1;
+  const foil=document.getElementById('buy-foil').value==='si';
+  const cond=document.getElementById('buy-cond').value;
+  await addToInventoryDirect({card_name:name,set_code:set,foil,condition:cond,qty,buy_price:price,sell_price:+(price*1.3).toFixed(2),source:'manual'});
+  const tx={type:'acquisto',items:[{name,set,foil,cond,qty}],total:price*qty,method:'contanti',note:'',created_at:new Date().toISOString()};
+  transactions.unshift({...tx,id:'local_'+Date.now()});
+  updateStats();
+  document.getElementById('buy-name').value='';document.getElementById('buy-price').value='';
+  showToast('Acquisto registrato: '+name+' x'+qty,'ok');
+  if(dfSession.vendorId!==DEMO_MODE_KEY) await sbInsertTransaction(tx);
+}
+
+// ============================================================
+// INVENTORY (CRUD con Supabase)
+// ============================================================
+async function quickAddToInventory(sfId, foil, sellPrice, buyPrice, name, set, imageUri, scryfallId, tcg){
+  const cond=document.getElementById('filter-cond')?.value||'NM';
+  const lang=(tcg||activeTcg)==='pokemon'?'EN':(document.getElementById('filter-lang')?.value||'IT');
+  await addToInventoryDirect({
+    card_name:name, set_code:set, foil, condition:cond, language:lang,
+    qty:1, buy_price:+parseFloat(buyPrice).toFixed(2), sell_price:+parseFloat(sellPrice).toFixed(2),
+    scryfall_id:scryfallId, image_uri:imageUri, source:'scryfall',
+    tcg:tcg||activeTcg||'mtg'
+  });
+  showToast(name+(foil?' FOIL':'')+' aggiunto all\'inventario','ok');
+}
+
+function addToInventory(){
+  if(!selectedCard)return;
+  const price=parseFloat(document.getElementById('sell-price').value)||selectedCard.prices.avg;
+  addToInventoryDirect({card_name:selectedCard.name,set_code:selectedCard.set,foil:selectedCard.foil,condition:selectedCard.cond,language:selectedCard.lang,qty:1,buy_price:+(price*.5).toFixed(2),sell_price:price,scryfall_id:selectedCard.sfId,image_uri:selectedCard.imageUri,source:'manual',tcg:selectedCard._tcg||activeTcg||'mtg'});
+  showToast(selectedCard.name+' aggiunto all\'inventario');
+}
+
+async function addToInventoryDirect(item) {
+  const ex=inventory.find(i=>i.card_name===item.card_name&&i.set_code===item.set_code&&i.foil===item.foil&&i.condition===item.condition);
+  if(ex){
+    ex.qty+=(item.qty||1);
+    if(dfSession.vendorId!==DEMO_MODE_KEY) await sbUpdateInventoryQty(ex);
+  } else {
+    const newItem={...item,id:'local_'+Date.now()+Math.random(),vendor_id:dfSession.vendorId};
+    inventory.push(newItem);
+    // listing locale
+    listings.push({id:'local_l_'+Date.now(),card_name:item.card_name,set_code:item.set_code,foil:item.foil,condition:item.condition,price:item.sell_price,qty:item.qty||1,platform:'ct',status:'attivo',created_at:new Date().toISOString()});
+    listings.push({id:'local_l2_'+Date.now(),card_name:item.card_name,set_code:item.set_code,foil:item.foil,condition:item.condition,price:item.sell_price,qty:item.qty||1,platform:'mkm',status:'attivo',created_at:new Date().toISOString()});
+    if(dfSession.vendorId!==DEMO_MODE_KEY){
+      const saved=await sbInsertInventory(newItem);
+      if(saved){newItem.id=saved.id;await sbInsertListings(saved);}
+    }
+  }
+  updateStats();
+}
+
+function openAddInventoryModal(){
+  const m=document.getElementById('modal-inventory');delete m.dataset.editId;
+  document.getElementById('modal-inv-title').textContent='Aggiungi carta all\'inventario';
+  ['mi-name','mi-set','mi-buy-price','mi-sell-price','mi-sf-search'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('mi-qty').value=1;document.getElementById('mi-foil').value='normal';document.getElementById('mi-cond').value='NM';
+  document.getElementById('mi-sf-results').innerHTML='';
+  document.getElementById('mi-sf-selected').style.display='none';
+  m.classList.add('open');
+}
+function closeModal(){document.getElementById('modal-inventory').classList.remove('open');}
+async function saveInventoryItem(){
+  const name=document.getElementById('mi-name').value.trim();
+  if(!name){showToast('Inserisci il nome',true);return;}
+  const m=document.getElementById('modal-inventory');
+  const editId=m.dataset.editId||null;
+  const data={
+    card_name:name,
+    set_code:document.getElementById('mi-set').value.trim()||'N/A',
+    qty:parseInt(document.getElementById('mi-qty').value)||1,
+    foil:document.getElementById('mi-foil').value==='foil',
+    condition:document.getElementById('mi-cond').value,
+    buy_price:parseFloat(document.getElementById('mi-buy-price').value)||0,
+    sell_price:parseFloat(document.getElementById('mi-sell-price').value)||0,
+    scryfall_id:modalSfCard?.id||null,
+    image_uri:modalSfCard?sfImageUrl(modalSfCard):null
+  };
+  if(editId){
+    const item=inventory.find(i=>i.id===editId);
+    if(item){Object.assign(item,data);if(dfSession.vendorId!==DEMO_MODE_KEY)await sbUpdateInventoryItem(item);}
+  } else {
+    await addToInventoryDirect({...data,source:modalSfCard?'scryfall':'manual'});
+  }
+  modalSfCard=null;
+  closeModal();renderInventory();updateStats();showToast(editId?'Carta aggiornata':'Carta aggiunta all\'inventario','ok');
+}
+function editInventoryItem(id){
+  const item=inventory.find(i=>i.id===id);if(!item)return;
+  const m=document.getElementById('modal-inventory');m.dataset.editId=id;
+  document.getElementById('modal-inv-title').textContent='Modifica carta';
+  document.getElementById('mi-name').value=item.card_name;document.getElementById('mi-set').value=item.set_code||'';
+  document.getElementById('mi-qty').value=item.qty||1;document.getElementById('mi-foil').value=item.foil?'foil':'normal';
+  document.getElementById('mi-cond').value=item.condition||'NM';document.getElementById('mi-buy-price').value=item.buy_price||'';
+  document.getElementById('mi-sell-price').value=item.sell_price||'';m.classList.add('open');
+}
+async function deleteInventoryItem(id){
+  const item=inventory.find(i=>i.id===id);
+  if(item){listings=listings.filter(l=>!(l.card_name===item.card_name&&l.set_code===item.set_code&&l.foil===item.foil));}
+  inventory=inventory.filter(i=>i.id!==id);
+  renderInventory();updateStats();showToast('Carta rimossa dall\'inventario');
+  if(dfSession.vendorId!==DEMO_MODE_KEY&&!String(id).startsWith('local_')) await sbDeleteInventory(id);
+}
+let invTcgFilter='all';
+function setInvTcg(tcg){
+  invTcgFilter=tcg;
+  ['all','mtg','pokemon'].forEach(t=>{
+    const b=document.getElementById('inv-tcg-'+t);
+    if(b) b.className=t===tcg?'btn-primary btn-sm':'btn-outline btn-sm';
+  });
+  renderInventory();
+}
+
+function renderInventory(){
+  const filter=(document.getElementById('inv-filter')?.value||'').toLowerCase();
+  const ff=document.getElementById('inv-filter-foil')?.value||'all';
+  const items=inventory.filter(i=>{
+    const mt=i.card_name.toLowerCase().includes(filter)||(i.set_code||'').toLowerCase().includes(filter);
+    const mf=ff==='all'||(ff==='foil'&&i.foil)||(ff==='normal'&&!i.foil);
+    const mt2=invTcgFilter==='all'||(i.tcg||'mtg')===invTcgFilter;
+    return mt&&mf&&mt2;
+  });
+  const c=document.getElementById('inventory-grid');
+  if(!items.length){c.innerHTML='<div class="empty"><div class="empty-icon">&#128230;</div><div>Inventario vuoto — aggiungi carte o importa da CardTrader/CardMarket</div></div>';return;}
+  let html='<div class="three-col">';
+  items.forEach(item=>{
+    const margin=((item.sell_price||0)-(item.buy_price||0)).toFixed(2);
+    const isMtg=(item.tcg||'mtg')==='mtg';
+    const dfOn=isMtg&&item.df_visible!==false;
+    const tcgBadge=isMtg?'<span style="font-size:.6rem;background:#e8f4e8;color:var(--green);padding:1px 5px;border-radius:4px;font-weight:700">MTG</span>'
+                        :'<span style="font-size:.6rem;background:#fff3cd;color:#b8860b;padding:1px 5px;border-radius:4px;font-weight:700">PKM</span>';
+    html+=`<div class="inv-card">
+      <div class="inv-card-header">
+        <div><div style="font-weight:700">${escHtml(item.card_name)}${item.foil?' <span class="foil-badge">FOIL</span>':''} ${tcgBadge}</div><div style="font-size:.72rem;color:var(--muted)">${item.set_code||'N/A'} · ${item.condition||'NM'}</div></div>
+        <div class="inv-qty">${item.qty}</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:10px">
+        <div><div style="font-size:.68rem;color:var(--muted)">ACQUISTO</div><div style="font-weight:700;color:var(--gold)">€${(item.buy_price||0).toFixed(2)}</div></div>
+        <div><div style="font-size:.68rem;color:var(--muted)">VENDITA</div><div style="font-weight:700;color:var(--green)">€${(item.sell_price||0).toFixed(2)}</div></div>
+        <div><div style="font-size:.68rem;color:var(--muted)">MARGINE</div><div style="font-weight:700;color:var(--blue)">€${margin}</div></div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn-outline btn-sm" onclick="editInventoryItem('${item.id}')" style="flex:1">Modifica</button>
+        ${isMtg?`<button class="btn-sm" style="${dfOn?'border:1px solid var(--green);color:var(--green)':'border:1px solid var(--border);color:var(--muted)'}" onclick="toggleDFVisible('${item.id}')">${dfOn?'● DF':'○ DF'}</button>`:''}
+        <button class="btn-danger btn-sm" onclick="deleteInventoryItem('${item.id}')">Rimuovi</button>
+      </div>
+    </div>`;
+  });
+  html+='</div>';c.innerHTML=html;
+}
+async function confirmClearInventory(){
+  if(!inventory.length){showToast('Inventario già vuoto');return;}
+  const n=inventory.length;
+  if(!confirm(`⚠️ Stai per eliminare ${n} carte dall'inventario.\n\nQuesta azione è IRREVERSIBILE.\nConfermi?`))return;
+  if(!confirm(`Ultima conferma: eliminare tutte le ${n} carte?`))return;
+  showToast('Eliminazione in corso...');
+  if(dfSession.vendorId!==DEMO_MODE_KEY){
+    const {error}=await sb.from('inventory').delete().eq('vendor_email',dfSession.email);
+    if(error){showToast('Errore Supabase: '+error.message,true);return;}
+  }
+  inventory=[];
+  renderInventory();updateStats();
+  showToast(n+' carte eliminate','ok');
+}
+
+function exportInventoryCSV(){
+  if(!inventory.length){showToast('Inventario vuoto',true);return;}
+  const rows=[['Nome','Edizione','Tipo','Condizione','Qty','Acquisto EUR','Vendita EUR','Margine EUR']];
+  inventory.forEach(i=>rows.push([i.card_name,i.set_code,i.foil?'Foil':'Normal',i.condition,i.qty,(i.buy_price||0).toFixed(2),(i.sell_price||0).toFixed(2),((i.sell_price||0)-(i.buy_price||0)).toFixed(2)]));
+  dlCSV(rows,'inventario_'+new Date().toISOString().slice(0,10)+'.csv');
+}
+
+// ============================================================
+// STORICO
+// ============================================================
+function renderStorico(){
+  const filter=(document.getElementById('storico-filter')?.value||'').toLowerCase();
+  const type=document.getElementById('storico-type')?.value||'all';
+  let items=transactions.filter(t=>{
+    const mt=type==='all'||t.type===type;
+    const items_arr=t.items||[];
+    const mf=!filter||items_arr.some(i=>(i.name||'').toLowerCase().includes(filter));
+    return mt&&mf;
+  });
+  const vendite=transactions.filter(t=>t.type==='vendita');
+  const acquisti=transactions.filter(t=>t.type==='acquisto');
+  const totV=vendite.reduce((s,t)=>s+(t.total||0),0);
+  const totA=acquisti.reduce((s,t)=>s+(t.total||0),0);
+  document.getElementById('stat-tot-vendite').textContent='EUR '+totV.toFixed(2);
+  document.getElementById('stat-num-vendite').textContent=vendite.length+' transazioni';
+  document.getElementById('stat-tot-acquisti').textContent='EUR '+totA.toFixed(2);
+  document.getElementById('stat-num-acquisti').textContent=acquisti.length+' transazioni';
+  document.getElementById('stat-margine').textContent='EUR '+(totV-totA).toFixed(2);
+  if(!items.length){document.getElementById('storico-table').innerHTML='<div class="empty"><div class="empty-icon">&#128196;</div><div>Nessuna transazione ancora</div></div>';return;}
+  let html='<table><thead><tr><th>Data</th><th>Tipo</th><th>Carte</th><th>Totale</th><th>Metodo</th><th>Note</th></tr></thead><tbody>';
+  items.forEach(tx=>{
+    const date=new Date(tx.created_at||tx.date||Date.now()).toLocaleString('it-IT');
+    const tipo=tx.type==='vendita'?'<span class="tag tag-green">VENDITA</span>':'<span class="tag tag-gold">ACQUISTO</span>';
+    const carte=(tx.items||[]).map(i=>escHtml(i.name)+(i.foil?' FOIL':'')).join(', ');
+    html+=`<tr><td style="color:var(--muted);font-size:.8rem">${date}</td><td>${tipo}</td><td>${carte}</td><td style="font-weight:700;color:${tx.type==='vendita'?'var(--green)':'var(--gold)'}">EUR ${(tx.total||0).toFixed(2)}</td><td><span class="tag tag-muted">${tx.method||'-'}</span></td><td style="color:var(--muted)">${tx.note||'-'}</td></tr>`;
+  });
+  html+='</tbody></table>';
+  document.getElementById('storico-table').innerHTML=html;
+}
+function exportStoricoCSV(){
+  if(!transactions.length){showToast('Nessuna transazione',true);return;}
+  const rows=[['Data','Tipo','Carte','Totale EUR','Metodo','Note']];
+  transactions.forEach(tx=>rows.push([new Date(tx.created_at||tx.date||Date.now()).toLocaleString('it-IT'),tx.type,(tx.items||[]).map(i=>i.name).join('; '),(tx.total||0).toFixed(2),tx.method||'',tx.note||'']));
+  dlCSV(rows,'storico_'+new Date().toISOString().slice(0,10)+'.csv');
+}
+
+// ============================================================
+// PLATFORM SYNC
+// ============================================================
+const CT_TOKEN_KEY='df_ct_token';
+function saveCTToken(){
+  const v=document.getElementById('ct-token-input')?.value||'';
+  try{localStorage.setItem(CT_TOKEN_KEY,v);}catch(e){}
+}
+function loadCTToken(){
+  try{return localStorage.getItem(CT_TOKEN_KEY)||'';}catch(e){return'';}
+}
+function initSyncUI(){
+  const t=loadCTToken();
+  const el=document.getElementById('ct-token-input');
+  if(el&&t)el.value=t;
+}
+
+// MKM CSV — formato accettato da Cardmarket bulk upload
+function exportMkmCsv(){
+  const items=inventory.filter(i=>(i.tcg||'mtg')==='mtg'&&i.qty>0);
+  if(!items.length){showToast('Nessuna carta MTG in inventario',true);return;}
+  const COND={'NM':'Near Mint','EX':'Excellent','VG':'Very Good','GD':'Good','LP':'Lightly Played','PL':'Played','PO':'Poor'};
+  const rows=[['Name','Edition','Language','Condition','Foil','Count','Price']];
+  items.forEach(i=>{
+    rows.push([
+      '"'+i.card_name.replace(/"/g,'""')+'"',
+      '"'+(i.set_code||'N/A').replace(/"/g,'""')+'"',
+      '"'+(i.language||'Italian')+'"',
+      '"'+(COND[i.condition]||i.condition||'Near Mint')+'"',
+      i.foil?'"Yes"':'"No"',
+      i.qty||1,
+      (i.sell_price||0).toFixed(2)
+    ]);
+  });
+  dlCSV(rows,'cardmarket_import_'+new Date().toISOString().slice(0,10)+'.csv');
+  showToast('CSV MKM scaricato — caricalo su Cardmarket → Il mio stock → Importa','ok');
+}
+
+// CT CSV — formato semplificato (senza blueprint_id, usare come riferimento)
+function exportCtCsv(){
+  const items=inventory.filter(i=>(i.tcg||'mtg')==='mtg'&&i.qty>0);
+  if(!items.length){showToast('Nessuna carta MTG in inventario',true);return;}
+  const rows=[['Name','Set','Condition','Foil','Language','Quantity','Price EUR']];
+  items.forEach(i=>{
+    rows.push([
+      '"'+i.card_name.replace(/"/g,'""')+'"',
+      '"'+(i.set_code||'').replace(/"/g,'""')+'"',
+      i.condition||'NM',
+      i.foil?'Yes':'No',
+      i.language||'English',
+      i.qty||1,
+      (i.sell_price||0).toFixed(2)
+    ]);
+  });
+  dlCSV(rows,'cardtrader_ref_'+new Date().toISOString().slice(0,10)+'.csv');
+  showToast('CSV CT scaricato','ok');
+}
+
+// Sync API CardTrader via Netlify Function proxy
+async function syncToCardtrader(){
+  const token=document.getElementById('ct-token-input')?.value.trim()||loadCTToken();
+  if(!token){showToast('Inserisci il Bearer Token CardTrader',true);return;}
+  const items=inventory.filter(i=>(i.tcg||'mtg')==='mtg'&&i.qty>0&&i.sell_price>0);
+  if(!items.length){showToast('Nessuna carta MTG con prezzo in inventario',true);return;}
+  const statusEl=document.getElementById('ct-sync-status');
+  if(statusEl)statusEl.textContent=`Sincronizzazione di ${items.length} carte...`;
+  try{
+    const resp=await fetch('/api/sync-cardtrader',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        token,
+        items:items.map(i=>({
+          name:i.card_name,set:i.set_code||'',condition:i.condition||'NM',
+          foil:i.foil||false,qty:i.qty||1,price:i.sell_price||0,
+          language:i.language||'English',tcg:i.tcg||'mtg'
+        }))
+      })
+    });
+    const r=await resp.json();
+    const msg=`✓ ${r.synced} sincronizzate${r.skipped>0?`, ${r.skipped} saltate`:''}`;
+    if(statusEl)statusEl.textContent=msg+(r.errors?.length?'\nErrori: '+r.errors.slice(0,3).join(' | '):'');
+    showToast(msg,'ok');
+  }catch(e){
+    if(statusEl)statusEl.textContent='Errore: '+e.message;
+    showToast('Errore sync CT: '+e.message,true);
+  }
+}
+
+// ============================================================
+// LISTING
+// ============================================================
+function renderListing(){
+  const filter=(document.getElementById('listing-filter')?.value||'').toLowerCase();
+  const platform=document.getElementById('listing-platform')?.value||'all';
+  const status=document.getElementById('listing-status')?.value||'all';
+  const items=listings.filter(l=>{
+    const mt=(l.card_name||'').toLowerCase().includes(filter);
+    const ms=status==='all'||l.status===status;
+    const mp=platform==='all'||l.platform===platform;
+    return mt&&ms&&mp;
+  });
+  if(!items.length){document.getElementById('listing-items').innerHTML='<div class="empty"><div class="empty-icon">&#128203;</div><div>Nessun listing — aggiungi carte all\'inventario</div></div>';return;}
+  let html='';
+  items.forEach(l=>{
+    const isActive=l.status==='attivo';
+    const date=new Date(l.created_at||Date.now()).toLocaleDateString('it-IT');
+    html+=`<div class="listing-item">
+      <div style="flex:1"><div style="font-weight:700">${escHtml(l.card_name)}${l.foil?' <span class="foil-badge">FOIL</span>':''}</div>
+      <div style="font-size:.72rem;color:var(--muted)">${l.set_code||'N/A'} · ${l.condition||'NM'} · ${l.qty} pz · ${date}</div></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="platform-badge">${(l.platform||'').toUpperCase()}</span>
+        <span style="font-weight:700;color:var(--green)">€${(l.price||0).toFixed(2)}</span>
+        ${isActive?'<span class="tag tag-green">ATTIVO</span>':'<span class="tag tag-red">RIMOSSO</span>'}
+        ${isActive?`<button class="btn-outline btn-sm" onclick="updateListingPrice('${l.id}')">Prezzo</button><button class="btn-danger btn-sm" onclick="removeListing('${l.id}')">Rimuovi</button>`:''}
+      </div>
+    </div>`;
+  });
+  document.getElementById('listing-items').innerHTML=html;
+}
+async function removeListing(id){
+  const l=listings.find(x=>x.id===id);
+  if(l){l.status='rimosso';if(dfSession.vendorId!==DEMO_MODE_KEY&&!String(id).startsWith('local_'))await sbUpdateListingStatus(l);}
+  renderListing();updateStats();showToast('Listing rimosso');
+}
+async function updateListingPrice(id){
+  const l=listings.find(x=>x.id===id);if(!l)return;
+  const np=prompt('Nuovo prezzo per '+l.card_name+' (attuale: €'+l.price?.toFixed(2)+'):', l.price);
+  if(np!==null&&!isNaN(np)){l.price=parseFloat(np);renderListing();if(dfSession.vendorId!==DEMO_MODE_KEY&&!String(id).startsWith('local_'))await sbUpdateListingPrice(l);showToast('Prezzo aggiornato');}
+}
+
+// ============================================================
+// STATS
+// ============================================================
+function updateStats(){
+  const today=new Date().toDateString();
+  const vOggi=transactions.filter(t=>t.type==='vendita'&&new Date(t.created_at||t.date||0).toDateString()===today).reduce((s,t)=>s+(t.total||0),0);
+  document.getElementById('stat-vendite-oggi').textContent=vOggi.toFixed(2);
+  document.getElementById('stat-carte-inv').textContent=inventory.reduce((s,i)=>s+(i.qty||0),0);
+  document.getElementById('stat-listing').textContent=listings.filter(l=>l.status==='attivo').length;
+  let mc=0;DF_WISHLISTS.forEach(u=>u.wishlist.forEach(item=>{if(getInventoryMatch(item.name))mc++;}));
+  const el=document.getElementById('stat-wishlist-match');if(el)el.textContent=mc;
+  const b=document.getElementById('wishlist-badge');if(b){b.textContent=mc;b.style.display=mc>0?'inline':'none';}
+  showSaveDot();
+}
+function showSaveDot(){const d=document.getElementById('save-dot');if(d){d.classList.add('show');setTimeout(()=>d.classList.remove('show'),1800);}}
+
+// ============================================================
+// SUPABASE CRUD
+// ============================================================
+async function toggleDFVisible(id){
+  const item=inventory.find(i=>i.id===id);
+  if(!item||(item.tcg||'mtg')!=='mtg')return;
+  item.df_visible=item.df_visible===false?true:false;
+  renderInventory();renderDFCollection();
+  if(dfSession.vendorId!==DEMO_MODE_KEY&&!String(id).startsWith('local_')){
+    try{
+      const{error}=await sb.from('inventory').update({df_visible:item.df_visible}).eq('id',id);
+      if(error)throw error;
+    }catch(e){enqueue({type:'toggle_df',data:{id,df_visible:item.df_visible}});}
+  }
+  showToast(item.card_name+(item.df_visible?' ora visibile su Dark Forge':' nascosta da Dark Forge'),'ok');
+}
+
+async function sbInsertInventory(item){
+  try{
+    const {data,error}=await sb.from('inventory').insert({
+      user_id:dfSession.sbUserId||undefined,
+      vendor_id:dfSession.vendorId,vendor_email:dfSession.email,
+      card_name:item.card_name,set_code:item.set_code||'N/A',
+      condition:item.condition||'NM',language:item.language||'Italian',foil:item.foil||false,
+      qty:item.qty||1,buy_price:item.buy_price||0,sell_price:item.sell_price||0,
+      source:item.source||'manual',scryfall_id:item.scryfall_id||null,image_uri:item.image_uri||null,
+      tcg:item.tcg||'mtg',
+      df_visible:(item.tcg||'mtg')==='mtg'
+    }).select().single();
+    if(error){console.error('sbInsertInventory error',error.message,error.details);return null;}
+    return data;
+  }catch(e){console.error('sbInsertInventory',e);return null;}
+}
+
+// Bulk insert per import massivo (chunk da 200, insert puro)
+async function sbBulkInsertInventory(items){
+  const rows=items.map(item=>({
+    user_id:dfSession.sbUserId||undefined,
+    vendor_id:dfSession.vendorId,vendor_email:dfSession.email,
+    card_name:item.card_name,set_code:item.set_code||'N/A',
+    condition:item.condition||'NM',language:item.language||'Italian',foil:item.foil||false,
+    qty:item.qty||1,buy_price:item.buy_price||0,sell_price:item.sell_price||0,
+    source:item.source||'import',scryfall_id:null,image_uri:null
+  }));
+  const CHUNK=200;let inserted=0,errors=0;
+  for(let i=0;i<rows.length;i+=CHUNK){
+    const chunk=rows.slice(i,i+CHUNK);
+    const {error}=await sb.from('inventory').insert(chunk);
+    if(error){console.error('sbBulkInsert errore chunk',i,error.message);errors+=chunk.length;}
+    else inserted+=chunk.length;
+    showToast(`Import: ${Math.min(i+CHUNK,rows.length)}/${rows.length} carte...`);
+    await new Promise(r=>setTimeout(r,50));
+  }
+  console.log(`Import completato: ${inserted} inserite, ${errors} errori`);
+  return {inserted,errors};
+}
+
+let _enrichRunning=false;
+async function enrichInventoryWithScryfall(){
+  if(_enrichRunning)return;
+  const toEnrich=inventory.filter(i=>!i.image_uri&&!String(i.id).startsWith('local_'));
+  if(!toEnrich.length){showToast('Nessuna carta da arricchire');return;}
+  _enrichRunning=true;
+  const uniqueNames=[...new Set(toEnrich.map(i=>i.card_name))];
+  let done=0,ok=0,miss=0;
+  const bar=document.getElementById('scryfall-enrich-bar');
+  const lbl=document.getElementById('scryfall-enrich-label');
+  const fill=document.getElementById('scryfall-enrich-fill');
+  if(bar)bar.style.display='block';
+  for(let idx=0;idx<uniqueNames.length;idx++){
+    const name=uniqueNames[idx];
+    try{
+      const res=await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`);
+      if(res.ok){
+        const card=await res.json();
+        const img=card.image_uris?.normal||card.card_faces?.[0]?.image_uris?.normal||null;
+        const sid=card.id;
+        const sellPriceScryfall=card.prices?.eur?parseFloat(card.prices.eur):null;
+        // update locale
+        const matched=inventory.filter(i=>i.card_name===name&&!i.image_uri);
+        matched.forEach(item=>{
+          item.image_uri=img;item.scryfall_id=sid;
+          if(sellPriceScryfall&&!item.sell_price)item.sell_price=sellPriceScryfall;
+        });
+        // update Supabase (batch per name)
+        const ids=matched.filter(i=>!String(i.id).startsWith('local_')).map(i=>i.id);
+        if(ids.length&&img){
+          const upd={image_uri:img,scryfall_id:sid};
+          if(sellPriceScryfall)upd.sell_price=sellPriceScryfall;
+          await sb.from('inventory').update(upd).in('id',ids);
+        }
+        ok++;
+      } else {miss++;}
+    }catch(e){miss++;}
+    done++;
+    const pct=Math.round(done/uniqueNames.length*100);
+    if(fill)fill.style.width=pct+'%';
+    if(lbl)lbl.textContent=`Scryfall: ${done}/${uniqueNames.length} nomi — ${ok} trovati, ${miss} non trovati`;
+    if(done%20===0)renderInventory();
+    await new Promise(r=>setTimeout(r,110));
+  }
+  _enrichRunning=false;
+  if(bar)bar.style.display='none';
+  renderInventory();updateStats();
+  showToast(`Scryfall completato: ${ok} arricchite, ${miss} non trovate`,'ok');
+}
+
+// ============================================================
+// OFFLINE QUEUE — operazioni Supabase in attesa di sync
+// ============================================================
+const OFFLINE_QUEUE_KEY='df_offline_queue_v1';
+function getQueue(){try{return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY)||'[]');}catch(e){return[];}}
+function saveQueue(q){try{localStorage.setItem(OFFLINE_QUEUE_KEY,JSON.stringify(q));}catch(e){}}
+function enqueue(op){
+  const q=getQueue();
+  q.push({...op,_qid:Date.now()+Math.random(),_ts:new Date().toISOString()});
+  saveQueue(q);updateOfflineBadge();
+}
+function dequeueById(qid){saveQueue(getQueue().filter(o=>o._qid!==qid));updateOfflineBadge();}
+
+function updateOfflineBadge(){
+  const n=getQueue().length;
+  let badge=document.getElementById('offline-badge');
+  if(!badge)return;
+  badge.textContent=n>0?`⏳ ${n} da sync`:'';
+  badge.style.display=n>0?'inline':'none';
+}
+
+async function syncOfflineQueue(){
+  if(!navigator.onLine||!dfSession||dfSession.vendorId===DEMO_MODE_KEY)return;
+  const q=getQueue();
+  if(!q.length)return;
+  let synced=0,failed=0;
+  for(const op of q){
+    try{
+      let ok=false;
+      if(op.type==='insert_transaction'){
+        const{error}=await sb.from('transactions').insert({vendor_id:dfSession.vendorId,type:op.data.type,items:op.data.items,total:op.data.total,method:op.data.method,note:op.data.note});
+        ok=!error;
+      } else if(op.type==='update_qty'){
+        const{error}=await sb.from('inventory').update({qty:op.data.qty,updated_at:new Date().toISOString()}).eq('id',op.data.id);
+        ok=!error;
+      } else if(op.type==='insert_inventory'){
+        const{error}=await sb.from('inventory').insert(op.data);
+        ok=!error;
+      } else if(op.type==='update_inventory'){
+        const{error}=await sb.from('inventory').update(op.data).eq('id',op.data.id);
+        ok=!error;
+      } else if(op.type==='delete_inventory'){
+        const{error}=await sb.from('inventory').delete().eq('id',op.data.id);
+        ok=!error;
+      } else if(op.type==='toggle_df'){
+        const{error}=await sb.from('inventory').update({df_visible:op.data.df_visible}).eq('id',op.data.id);
+        ok=!error;
+      }
+      if(ok){dequeueById(op._qid);synced++;}
+      else{failed++;}
+    }catch(e){failed++;}
+  }
+  if(synced>0)showToast(`✓ ${synced} operazioni sincronizzate`+(failed>0?`, ${failed} fallite`:''),'ok');
+  updateOfflineBadge();
+}
+
+// Ascolta ritorno connessione
+window.addEventListener('online',()=>{
+  showToast('Connessione ripristinata — sincronizzazione in corso...','ok');
+  setTimeout(syncOfflineQueue,1500);
+});
+window.addEventListener('offline',()=>{showToast('Modalità offline — le operazioni saranno sincronizzate al ritorno della connessione');});
+
+async function sbUpdateInventoryQty(item){
+  if(String(item.id).startsWith('local_'))return;
+  try{
+    const{error}=await sb.from('inventory').update({qty:item.qty,updated_at:new Date().toISOString()}).eq('id',item.id);
+    if(error)throw error;
+  }catch(e){enqueue({type:'update_qty',data:{id:item.id,qty:item.qty}});}
+}
+
+async function sbUpdateInventoryItem(item){
+  if(String(item.id).startsWith('local_'))return;
+  try{
+    const{error}=await sb.from('inventory').update({card_name:item.card_name,set_code:item.set_code,condition:item.condition,foil:item.foil,qty:item.qty,buy_price:item.buy_price,sell_price:item.sell_price,updated_at:new Date().toISOString()}).eq('id',item.id);
+    if(error)throw error;
+  }catch(e){enqueue({type:'update_inventory',data:{id:item.id,card_name:item.card_name,set_code:item.set_code,condition:item.condition,foil:item.foil,qty:item.qty,buy_price:item.buy_price,sell_price:item.sell_price}});}
+}
+
+async function sbDeleteInventory(id){
+  try{
+    const{error}=await sb.from('inventory').delete().eq('id',id);
+    if(error)throw error;
+  }catch(e){enqueue({type:'delete_inventory',data:{id}});}
+}
+
+async function sbInsertListings(inventoryRow){
+  try{
+    await sb.from('listings').insert([
+      {vendor_id:dfSession.vendorId,inventory_id:inventoryRow.id,card_name:inventoryRow.card_name,set_code:inventoryRow.set_code,foil:inventoryRow.foil,condition:inventoryRow.condition,platform:'ct',price:inventoryRow.sell_price,qty:inventoryRow.qty,status:'attivo'},
+      {vendor_id:dfSession.vendorId,inventory_id:inventoryRow.id,card_name:inventoryRow.card_name,set_code:inventoryRow.set_code,foil:inventoryRow.foil,condition:inventoryRow.condition,platform:'mkm',price:inventoryRow.sell_price,qty:inventoryRow.qty,status:'attivo'}
+    ]);
+  }catch(e){console.error('sbInsertListings offline — skipped',e);}
+}
+
+async function sbInsertTransaction(tx){
+  try{
+    const{error}=await sb.from('transactions').insert({vendor_id:dfSession.vendorId,type:tx.type,items:tx.items,total:tx.total,method:tx.method,note:tx.note});
+    if(error)throw error;
+  }catch(e){enqueue({type:'insert_transaction',data:{type:tx.type,items:tx.items,total:tx.total,method:tx.method,note:tx.note||''}});}
+}
+
+async function sbUpdateListingStatus(l){
+  if(String(l.id).startsWith('local_'))return;
+  try{await sb.from('listings').update({status:l.status,updated_at:new Date().toISOString()}).eq('id',l.id);}
+  catch(e){console.error('sbUpdateListingStatus',e);}
+}
+async function sbUpdateListingPrice(l){
+  if(String(l.id).startsWith('local_'))return;
+  try{await sb.from('listings').update({price:l.price,updated_at:new Date().toISOString()}).eq('id',l.id);}
+  catch(e){console.error('sbUpdateListingPrice',e);}
+}
+
+async function loadDataFromSupabase(){
+  try{
+    const [{data:inv},{data:txs},{data:lst}]=await Promise.all([
+      sb.from('inventory').select('*').eq('vendor_email',dfSession.email).order('created_at',{ascending:false}),
+      sb.from('transactions').select('*').eq('vendor_id',dfSession.vendorId).order('created_at',{ascending:false}),
+      sb.from('listings').select('*').eq('vendor_id',dfSession.vendorId).order('created_at',{ascending:false})
+    ]);
+    inventory=inv||[];
+    transactions=(txs||[]).map(t=>({...t,items:t.items||[]}));
+    listings=lst||[];
+  }catch(e){console.error('loadDataFromSupabase',e);inventory=[];transactions=[];listings=[];}
+}
+
+// ============================================================
+// IMPORT
+// ============================================================
+let importBuffer=[];
+const CT_BASE='https://api.cardtrader.com/api/v2';
+
+async function testCTConnection(){
+  const token=document.getElementById('ct-api-key').value.trim();
+  if(!token){showCTSt('Inserisci il token API.','error');return;}
+  showCTSt('<span class="spinner" style="border-top-color:var(--accent)"></span> Verifica...','info');
+  try{const r=await fetch(`${CT_BASE}/me`,{headers:{'Authorization':'Bearer '+token}});if(r.ok){const m=await r.json();showCTSt('Connesso come '+(m.username||m.email||'vendor'),'ok');}else showCTSt('Token non valido ('+r.status+').','error');}
+  catch(e){showCTSt('CORS bloccato. Usa import CSV.','warn');}
+}
+function parseCTPrice(p){
+  // CT può restituire price come {cents:10000,currency:"EUR"} oppure numero intero in cents
+  if(p.price?.cents!=null) return p.price.cents/100;
+  if(typeof p.price==='number') return p.price>500?p.price/100:p.price; // >500 = probabilmente cents
+  if(typeof p.price==='string') return parseFloat(p.price.replace(',','.'))||0;
+  return 0;
+}
+function mapCTProduct(p){
+  return {
+    card_name:p.name_en||p.name||p.blueprint?.name_en||p.blueprint?.name||'Sconosciuto',
+    set_code:(p.expansion?.code||p.blueprint?.expansion?.code||p.set_code||'-').toUpperCase(),
+    foil:!!(p.foil||p.properties_hash?.mtg_foil||p.blueprint?.properties?.mtg_foil),
+    condition:mapCTCond(p.condition||p.properties_hash?.condition||p.graded_condition||'NM'),
+    language:p.properties_hash?.mtg_language||p.language||'en',
+    qty:parseInt(p.quantity||p.count||1)||1,
+    buy_price:0,
+    sell_price:parseCTPrice(p),
+    source:'cardtrader'
+  };
+}
+async function importFromCT(){
+  const token=document.getElementById('ct-api-key').value.trim();
+  const gameId=document.getElementById('ct-game').value;
+  if(!token){showCTSt('Inserisci il token API.','error');return;}
+  let allProducts=[],page=1,hasMore=true;
+  showCTSt('<span class="spinner" style="border-top-color:var(--accent)"></span> Recupero stock pagina 1...','info');
+  try{
+    while(hasMore){
+      const r=await fetch(`${CT_BASE}/products/export?game_id=${gameId}&page=${page}&per_page=1000`,{headers:{'Authorization':'Bearer '+token}});
+      if(!r.ok){
+        if(r.status===401){showCTSt('Token non valido o scaduto.','error');return;}
+        throw new Error('HTTP '+r.status);
+      }
+      const data=await r.json();
+      const products=Array.isArray(data)?data:(data.products||data.data||data.items||[]);
+      allProducts=allProducts.concat(products);
+      // Controlla se c'è un'altra pagina
+      const total=data.meta?.total||data.total||0;
+      hasMore=products.length===1000&&allProducts.length<total;
+      if(hasMore){page++;showCTSt(`<span class="spinner" style="border-top-color:var(--accent)"></span> Recupero pagina ${page} (${allProducts.length} carte finora)...`,'info');}
+      await new Promise(r=>setTimeout(r,200));
+    }
+    if(!allProducts.length){showCTSt('Nessun prodotto nel tuo stock CT.','warn');return;}
+    importBuffer=allProducts.map(mapCTProduct).filter(p=>p.card_name&&p.card_name!=='Sconosciuto');
+    showCTSt(`Trovate ${importBuffer.length} carte (${allProducts.length} totali CT).`,'ok');
+    renderImportPreview();
+  }catch(e){
+    if(e.message.includes('Failed to fetch')||e.name==='TypeError')showCTSt('CORS bloccato dal browser. Usa import CSV da CT.','warn');
+    else showCTSt('Errore: '+e.message,'error');
+  }
+}
+function mapCTCond(ct){const m={'Mint':'NM','Near Mint':'NM','Slightly Played':'EX','Moderately Played':'VG','Played':'GD','Heavily Played':'LP','Poor':'PL','NM':'NM','EX':'EX','VG':'VG','GD':'GD','LP':'LP','PL':'PL'};return m[ct]||'NM';}
+function showCTSt(msg,type){const el=document.getElementById('ct-status');el.style.display='block';const c={'ok':'var(--green)','error':'var(--red)','warn':'var(--gold)','info':'var(--muted)'};el.style.color=c[type]||'var(--muted)';el.innerHTML=msg;}
+
+function parseMKMCsv(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=(e)=>{
+    try{
+      const parsed=parseCSV(e.target.result);
+      if(!parsed.length){showMKMSt('File CSV vuoto o non riconosciuto.','error');return;}
+      importBuffer=parsed.map(row=>({
+        card_name:row['Name']||row['Nome']||row['Article']||row['Articolo']||'Sconosciuto',
+        set_code:row['Expansion']||row['Edizione']||row['Set']||'-',
+        foil:(row['Foil']||'').toLowerCase()==='true'||(row['Foil']||'')==='1',
+        condition:mapMKMCond(row['Condition']||row['Condizione']||'NM'),
+        qty:parseInt(row['Amount']||row['Quantita']||row['Quantity']||1),
+        buy_price:0,sell_price:parseFloat((row['Price']||row['Prezzo']||'0').replace(',','.')),
+        language:row['Language']||row['Lingua']||'IT',source:'cardmarket'
+      })).filter(c=>c.card_name&&c.card_name!=='Sconosciuto');
+      showMKMSt('Trovate '+importBuffer.length+' carte.','ok');renderImportPreview();
+    }catch(err){showMKMSt('Errore parsing CSV: '+err.message,'error');}
+  };
+  reader.readAsText(file,'UTF-8');
+}
+function mapMKMCond(mkm){const m={'Mint':'NM','Near Mint':'NM','Excellent':'EX','Good':'VG','Light Played':'LP','Played':'PL','Poor':'PL','NM':'NM','EX':'EX','GD':'GD','LP':'LP','PL':'PL'};return m[mkm]||'NM';}
+function showMKMSt(msg,type){const el=document.getElementById('mkm-status');el.style.display='block';const c={'ok':'var(--green)','error':'var(--red)','warn':'var(--gold)','info':'var(--muted)'};el.style.color=c[type]||'var(--muted)';el.innerHTML=msg;}
+
+function parseCSV(text){
+  const lines=text.split(/\r?\n/).filter(l=>l.trim());if(lines.length<2)return[];
+  const sep=lines[0].includes(';')?';':',';
+  const headers=lines[0].split(sep).map(h=>h.replace(/^"|"$/g,'').trim());
+  return lines.slice(1).map(line=>{
+    const values=[];let inQ=false,cur='';
+    for(let i=0;i<line.length;i++){if(line[i]==='"'){inQ=!inQ;continue;}if(line[i]===sep&&!inQ){values.push(cur.trim());cur='';continue;}cur+=line[i];}
+    values.push(cur.trim());
+    const row={};headers.forEach((h,i)=>row[h]=values[i]||'');return row;
+  }).filter(row=>Object.values(row).some(v=>v));
+}
+function renderImportPreview(){
+  const c=document.getElementById('import-preview'),a=document.getElementById('import-actions'),ct=document.getElementById('import-count');
+  if(!importBuffer.length){c.innerHTML='<div class="empty"><div class="empty-icon">&#128229;</div><div>Nessun dato da importare</div></div>';a.style.display='none';ct.textContent='';return;}
+  ct.textContent='('+importBuffer.length+' carte)';a.style.display='block';
+  const prev=importBuffer.slice(0,50);
+  let html='<div style="max-height:400px;overflow-y:auto"><table><thead><tr><th>Carta</th><th>Set</th><th>Cond.</th><th>Qty</th><th>EUR</th><th>Fonte</th></tr></thead><tbody>';
+  prev.forEach(x=>{html+=`<tr><td style="font-weight:600">${escHtml(x.card_name)}${x.foil?' FOIL':''}</td><td style="color:var(--muted);font-size:.8rem">${x.set_code}</td><td><span class="tag tag-muted">${x.condition}</span></td><td style="font-weight:700;color:var(--accent)">${x.qty}</td><td style="color:var(--green);font-weight:700">${x.sell_price.toFixed(2)}</td><td style="font-size:.72rem;color:var(--muted)">${x.source==='cardtrader'?'CT':'MKM'}</td></tr>`;});
+  if(importBuffer.length>50)html+=`<tr><td colspan="6" style="text-align:center;color:var(--muted);font-size:.8rem">... e altre ${importBuffer.length-50} carte</td></tr>`;
+  html+='</tbody></table></div>';c.innerHTML=html;
+}
+async function confirmImport(){
+  if(!importBuffer.length)return;
+  const total=importBuffer.length;
+  showToast('Importazione '+total+' carte in corso...');
+
+  // Aggiorna inventario locale
+  let added=0,updated=0;
+  importBuffer.forEach(item=>{
+    const ex=inventory.find(i=>i.card_name===item.card_name&&i.set_code===item.set_code&&i.foil===item.foil&&i.condition===item.condition);
+    if(ex){ex.qty=item.qty;if(item.sell_price>0)ex.sell_price=item.sell_price;updated++;}
+    else{inventory.push({...item,id:'local_'+Date.now()+Math.random(),vendor_id:dfSession.vendorId,vendor_email:dfSession.email,source:item.source||'import',language:'Italian',created_at:new Date().toISOString()});added++;}
+  });
+
+  // Salva su Supabase con bulk insert
+  if(dfSession.vendorId!==DEMO_MODE_KEY){
+    const result=await sbBulkInsertInventory(importBuffer);
+    // Ricarica da Supabase solo se insert ok — altrimenti teniamo l'inventario locale
+    if(result.errors===0){
+      await loadDataFromSupabase();
+      enrichInventoryWithScryfall(); // background, no await
+    } else {
+      showToast(result.errors+' carte non salvate su Supabase (ricontrolla connessione)','warn');
+    }
+  }
+
+  updateStats();clearImportPreview();
+  showToast(added+' aggiunte, '+updated+' aggiornate su '+total+' totali','ok');
+  showTabDirect('inventario');
+}
+function clearImportPreview(){importBuffer=[];renderImportPreview();document.getElementById('ct-status').style.display='none';document.getElementById('mkm-status').style.display='none';const f=document.getElementById('mkm-csv-file');if(f)f.value='';const f2=document.getElementById('custom-csv-file');if(f2)f2.value='';}
+
+// ============================================================
+// SCRYFALL SEARCH IN MODALE INVENTARIO
+// ============================================================
+let modalSfTimeout=null,modalSfCard=null;
+function debounceModalSearch(){clearTimeout(modalSfTimeout);modalSfTimeout=setTimeout(modalSearch,400);}
+async function modalSearch(){
+  const q=document.getElementById('mi-sf-search').value.trim();
+  const el=document.getElementById('mi-sf-results');
+  if(q.length<2){el.innerHTML='';return;}
+  el.innerHTML='<div style="color:var(--muted);font-size:.78rem;padding:6px">Ricerca...</div>';
+  const results=await sfSearch(q);
+  if(!results.length){el.innerHTML='<div style="color:var(--muted);font-size:.78rem;padding:6px">Nessuna carta trovata</div>';return;}
+  let html='';
+  results.slice(0,8).forEach(card=>{
+    const img=sfImageUrl(card);
+    const p=sfPrices(card,false);
+    html+=`<div onclick="selectModalCard('${card.id}')" style="display:flex;align-items:center;gap:10px;padding:7px 10px;cursor:pointer;border-radius:6px;margin-bottom:2px;background:var(--surface2);border:1px solid var(--border)" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+      ${img?`<img src="${img}" style="width:28px;height:38px;border-radius:3px;object-fit:cover">`:'<div style="width:28px;height:38px;background:var(--surface);border-radius:3px"></div>'}
+      <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(card.name)}</div>
+      <div style="font-size:.7rem;color:var(--muted)">${card.set.toUpperCase()} · ${card.type_line?.split('—')[0].trim()||''}</div></div>
+      <div style="font-size:.78rem;font-weight:700;color:var(--green);white-space:nowrap">€${p.avg}</div>
+    </div>`;
+  });
+  el.innerHTML=html;
+}
+function selectModalCard(sfId){
+  const card=(sfCache[document.getElementById('mi-sf-search').value.toLowerCase()]?.data||[]).find(c=>c.id===sfId)||searchResults.find(c=>c.id===sfId);
+  if(!card)return;
+  modalSfCard=card;
+  const foil=document.getElementById('mi-foil').value==='foil';
+  const p=sfPrices(card,foil);
+  const img=sfImageUrl(card);
+  // autofill campi
+  document.getElementById('mi-name').value=card.name;
+  document.getElementById('mi-set').value=card.set.toUpperCase();
+  document.getElementById('mi-sell-price').value=p.avg||'';
+  document.getElementById('mi-buy-price').value=(p.avg*0.5).toFixed(2)||'';
+  // mostra preview
+  document.getElementById('mi-sf-img').src=img;
+  document.getElementById('mi-sf-name').textContent=card.name;
+  document.getElementById('mi-sf-meta').textContent=card.set.toUpperCase()+' · '+card.type_line?.split('—')[0].trim();
+  document.getElementById('mi-sf-selected').style.display='flex';
+  document.getElementById('mi-sf-results').innerHTML='';
+  document.getElementById('mi-sf-search').value='';
+}
+function clearModalSfSelection(){
+  modalSfCard=null;
+  document.getElementById('mi-sf-selected').style.display='none';
+  document.getElementById('mi-sf-search').value='';
+}
+// Aggiorna prezzi se cambia foil nella modale
+document.addEventListener('change',function(e){
+  if(e.target.id==='mi-foil'&&modalSfCard){
+    const p=sfPrices(modalSfCard,e.target.value==='foil');
+    document.getElementById('mi-sell-price').value=p.avg||'';
+    document.getElementById('mi-buy-price').value=(p.avg*0.5).toFixed(2)||'';
+  }
+});
+
+// ============================================================
+// IMPORT CSV GENERICO
+// ============================================================
+function downloadCSVTemplate(){
+  const rows=[
+    ['Name','Set code','Collector number','Foil','Condition','Language','Quantity','Purchase price'],
+    ['Lightning Bolt','M21','141','normal','NM','EN','4','0.80'],
+    ['Ragavan, Nimble Pilferer','MH2','138','foil','NM','EN','1','30.00'],
+  ];
+  dlCSV(rows,'template_import_darkforge.csv');
+  showToast('Template CSV scaricato');
+}
+function parseCustomCSV(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=(e)=>{
+    try{
+      const parsed=parseCSV(e.target.result);
+      if(!parsed.length){showCustomCSVSt('File CSV vuoto.','error');return;}
+      importBuffer=parsed.map(row=>({
+        card_name:row['Name']||row['Nome']||row['Carta']||row['Article']||row['Articolo']||'',
+        set_code:(row['Set code']||row['Set Code']||row['SetCode']||row['Edizione']||row['Set']||row['Edition']||row['Expansion']||'').toUpperCase()||'-',
+        collector_number:row['Collector number']||row['Collector Number']||row['CollectorNumber']||'',
+        foil:(()=>{const f=(row['Foil']||'').toLowerCase();return f==='foil'||f==='sì'||f==='si'||f==='yes'||f==='1'||f==='true';})(),
+        condition:mapMKMCond(row['Condition']||row['Condizione']||'NM'),
+        language:row['Language']||row['Lingua']||'EN',
+        qty:parseInt(row['Quantity']||row['Quantita']||row['Quantità']||row['Qty']||row['Amount']||1)||1,
+        buy_price:parseFloat((row['Purchase price']||row['Purchase Price']||row['PurchasePrice']||row['PrezzoAcquisto']||row['BuyPrice']||'0').replace(',','.'))||0,
+        sell_price:parseFloat((row['Price']||row['PrezzoVendita']||row['SellPrice']||row['Prezzo']||'0').replace(',','.'))||0,
+        notes:row['Note']||row['Notes']||'',
+        source:'manabox'
+      })).filter(c=>c.card_name);
+      showCustomCSVSt('Trovate '+importBuffer.length+' carte.','ok');
+      renderImportPreview();
+    }catch(err){showCustomCSVSt('Errore: '+err.message,'error');}
+  };
+  reader.readAsText(file,'UTF-8');
+}
+function showCustomCSVSt(msg,type){const el=document.getElementById('custom-csv-status');if(!el)return;el.style.display='block';const c={'ok':'var(--green)','error':'var(--red)','warn':'var(--gold)'};el.style.color=c[type]||'var(--muted)';el.innerHTML=msg;}
+
+// ============================================================
+// WISHLIST
+// ============================================================
+const DF_WISHLISTS=[
+  {userId:'u001',username:'Marco_MTG',zone:'Milano',lastActive:'2 min fa',wishlist:[
+    {name:'Lightning Bolt',set:'M21',foil:false,maxPrice:2,priority:'alta'},
+    {name:'Ragavan, Nimble Pilferer',set:'MH2',foil:false,maxPrice:50,priority:'alta'},
+    {name:'Force of Will',set:'EMA',foil:false,maxPrice:40,priority:'media'},
+  ]},
+  {userId:'u002',username:'Giulia_Legacy',zone:'Milano',lastActive:'15 min fa',wishlist:[
+    {name:'Brainstorm',set:'EMA',foil:true,maxPrice:5,priority:'alta'},
+    {name:'Counterspell',set:'MH1',foil:false,maxPrice:1.5,priority:'bassa'},
+    {name:'Force of Will',set:'ALL',foil:false,maxPrice:80,priority:'media'},
+  ]},
+  {userId:'u003',username:'Dario_Vintage',zone:'Milano Nord',lastActive:'1 ora fa',wishlist:[
+    {name:'Wrenn and Six',set:'MH2',foil:false,maxPrice:60,priority:'alta'},
+    {name:'Thoughtseize',set:'THS',foil:false,maxPrice:18,priority:'media'},
+  ]},
+];
+function getInventoryMatch(name){return inventory.find(i=>i.card_name===name&&(i.qty||0)>0);}
+function renderWishlist(){
+  const filter=(document.getElementById('wl-filter')?.value||'').toLowerCase();
+  const sf=document.getElementById('wl-filter-status')?.value||'all';
+  let all=[];DF_WISHLISTS.forEach(u=>u.wishlist.forEach(item=>{const m=getInventoryMatch(item.name);all.push({...item,user:u,match:m});}));
+  if(filter)all=all.filter(i=>i.name.toLowerCase().includes(filter)||i.user.username.toLowerCase().includes(filter));
+  if(sf==='match')all=all.filter(i=>i.match);if(sf==='nomatch')all=all.filter(i=>!i.match);
+  const total=all.length,matches=all.filter(i=>i.match).length;
+  const value=all.filter(i=>i.match).reduce((s,i)=>s+(i.match?.sell_price||0),0);
+  document.getElementById('wl-stat-total').textContent=total;
+  document.getElementById('wl-stat-match').textContent=matches;
+  document.getElementById('wl-stat-value').textContent='EUR '+value.toFixed(2);
+  const c=document.getElementById('wishlist-container');
+  if(!all.length){c.innerHTML='<div class="empty"><div class="empty-icon">&#10084;</div><div>Nessuna wishlist trovata</div></div>';return;}
+  const byUser={};all.forEach(i=>{if(!byUser[i.user.userId])byUser[i.user.userId]={user:i.user,items:[]};byUser[i.user.userId].items.push(i);});
+  let html='';
+  Object.values(byUser).forEach(({user,items})=>{
+    const um=items.filter(i=>i.match).length;
+    html+=`<div class="card" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--accent);color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem">${user.username[0]}</div>
+        <div><div style="font-weight:700">${escHtml(user.username)} <span style="font-size:.72rem;color:var(--muted);font-weight:400">${user.zone}</span></div><div style="font-size:.72rem;color:var(--muted)">Attivo: ${user.lastActive}</div></div>
+        ${um>0?`<div style="margin-left:auto;display:flex;gap:8px;align-items:center"><span class="tag tag-green">${um} disponibili</span><button class="btn-primary btn-sm" onclick="notifyUser('${user.userId}','${escHtml(user.username)}')">Notifica</button></div>`:'<span class="tag tag-muted" style="margin-left:auto">0 match</span>'}
+      </div>
+      <table><thead><tr><th>Carta</th><th>Set</th><th>Budget max</th><th>Priorità</th><th>Stock</th><th></th></tr></thead><tbody>`;
+    items.forEach(item=>{
+      const m=item.match;const pc=item.priority==='alta'?'tag-red':item.priority==='media'?'tag-gold':'tag-muted';
+      html+=`<tr style="${m?'background:rgba(45,134,83,.05)':''}"><td style="font-weight:700">${escHtml(item.name)}${item.foil?' FOIL':''}</td><td style="color:var(--muted);font-size:.8rem">${item.set}</td><td style="color:var(--gold);font-weight:700">€${item.maxPrice}</td><td><span class="tag ${pc}">${item.priority}</span></td><td>${m?`<span style="color:var(--green);font-weight:700">${m.qty} in stock (€${(m.sell_price||0).toFixed(2)})</span>`:'<span style="color:var(--muted)">mancante</span>'}</td><td>${m?`<button class="btn-success btn-sm" onclick="addToCartFromWL('${escHtml(item.name)}','${m.set_code}',${item.foil},${m.sell_price||0})">+ Cassa</button>`:''}</td></tr>`;
+    });
+    html+=`</tbody></table></div>`;
+  });
+  c.innerHTML=html;
+}
+function addToCartFromWL(name,set,foil,price){cart.push({name,set,foil,cond:'NM',lang:'IT',sellPrice:price,cartId:Date.now()});renderCart();updateBadge();showToast(name+' aggiunto al carrello');}
+function notifyUser(uid,uname){showToast('Notifica inviata a '+uname+' su Dark Forge','ok');}
+function notifyAllAvailable(){let n=0;DF_WISHLISTS.forEach(u=>{if(u.wishlist.some(item=>getInventoryMatch(item.name)))n++;});showToast('Notifiche inviate a '+n+' utenti con match disponibili','ok');}
+
+// ============================================================
+// DARK FORGE PANEL
+// ============================================================
+function renderDarkForge(){renderDFCollection();renderDFSearch();renderDFActivityFeed();}
+
+function renderDFSearch(){
+  const q=(document.getElementById('df-inv-search')?.value||'').toLowerCase().trim();
+  const el=document.getElementById('df-inv-results');if(!el)return;
+  // Cerca carte MTG nell'inventario NON ancora su DF
+  const pool=inventory.filter(i=>(i.tcg||'mtg')==='mtg'&&i.df_visible===false&&i.qty>0);
+  if(!q){
+    const tot=inventory.filter(i=>(i.tcg||'mtg')==='mtg'&&i.df_visible===false&&i.qty>0).length;
+    el.innerHTML=tot>0
+      ?`<div style="color:var(--muted);font-size:.8rem;padding:4px">${tot} carte MTG non ancora su Dark Forge — cerca per aggiungerle</div>`
+      :'<div style="color:var(--muted);font-size:.8rem;padding:4px">Tutte le carte MTG sono già su Dark Forge</div>';
+    return;
+  }
+  const matches=pool.filter(i=>i.card_name.toLowerCase().includes(q)||(i.set_code||'').toLowerCase().includes(q)).slice(0,6);
+  if(!matches.length){el.innerHTML='<div style="color:var(--muted);font-size:.8rem;padding:4px">Nessuna carta trovata (o già su DF)</div>';return;}
+  let html='';
+  matches.forEach(item=>{
+    html+=`<div class="listing-item" style="padding:8px 10px;margin-bottom:4px">
+      <div style="flex:1"><div style="font-size:.85rem;font-weight:700">${escHtml(item.card_name)}${item.foil?' <span class="foil-badge">FOIL</span>':''}</div>
+      <div style="font-size:.7rem;color:var(--muted)">${item.set_code||'N/A'} · ${item.condition||'NM'} · ${item.qty} pz · €${(item.sell_price||0).toFixed(2)}</div></div>
+      <button class="btn-success btn-sm" onclick="toggleDFVisible('${item.id}');renderDFSearch();renderDFCollection()">+ Aggiungi a DF</button>
+    </div>`;
+  });
+  el.innerHTML=html;
+}
+
+function renderDFCollection(){
+  const c=document.getElementById('df-collection-list');if(!c)return;
+  const dfItems=inventory.filter(i=>(i.tcg||'mtg')==='mtg'&&i.df_visible!==false&&i.qty>0);
+  const countEl=document.getElementById('df-count');
+  if(countEl)countEl.textContent='('+dfItems.length+')';
+  if(!dfItems.length){
+    c.innerHTML='<div style="color:var(--muted);font-size:.85rem;text-align:center;padding:16px">Nessuna carta su Dark Forge.<br><span style="font-size:.78rem">Cerca nell\'inventario qui sopra per aggiungerne.</span></div>';
+    return;
+  }
+  let html='';
+  dfItems.forEach(item=>{
+    html+=`<div class="listing-item" style="padding:10px 12px">
+      <div style="flex:1"><div style="font-size:.85rem;font-weight:700">${escHtml(item.card_name)}${item.foil?' FOIL':''}</div>
+      <div style="font-size:.7rem;color:var(--muted)">${item.set_code||'N/A'} · ${item.condition||'NM'} · ${item.qty} pz</div></div>
+      <span style="font-weight:700;color:var(--green);margin-right:8px">€${(item.sell_price||0).toFixed(2)}</span>
+      <button class="btn-sm btn-danger" style="font-size:.65rem" onclick="toggleDFVisible('${item.id}');renderDFSearch();renderDFCollection()">✕ Rimuovi</button>
+    </div>`;
+  });
+  c.innerHTML=html;
+}
+function renderDFActivityFeed(){
+  const c=document.getElementById('df-activity-items');if(!c)return;
+  const feed=[
+    {text:'<strong>Marco_MTG</strong> ha aggiunto <em>Lightning Bolt</em> alla wishlist',time:'2 min fa'},
+    {text:'<strong>Giulia_Legacy</strong> ha visitato il tuo profilo',time:'8 min fa'},
+    {text:'<strong>Sara_Commander</strong> ha aggiunto <em>Sol Ring</em> alla wishlist',time:'22 min fa'},
+    {text:'<strong>3 utenti</strong> hanno visto il tuo stock oggi',time:'2h fa'},
+  ];
+  c.innerHTML=feed.map(f=>`<div style="display:flex;align-items:flex-start;gap:8px;padding:9px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-size:.82rem">${f.text}</div><div style="font-size:.7rem;color:var(--muted);white-space:nowrap">${f.time}</div></div>`).join('');
+}
+function syncCollectionDF(){renderDFCollection();showToast('Collezione sincronizzata su Dark Forge','ok');}
+function saveDFSettings(){const name=document.getElementById('df-name-input').value;document.getElementById('df-vendor-name').textContent=name||dfSession?.vendorName||'Vendor';showToast('Impostazioni salvate','ok');}
+
+// ============================================================
+// TOAST + UTILS
+// ============================================================
+function showToast(msg,type=''){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className='toast'+(type?' '+type:'');
+  requestAnimationFrame(()=>t.classList.add('show'));
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+function dlCSV(rows,filename){
+  const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,%EF%BB%BF'+encodeURIComponent(csv);a.download=filename;a.click();
+}
+function escHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// ============================================================
+// LOGIN / AUTH / SUPABASE AUTH
+// ============================================================
+function showLoginTab(tab){
+  const isLogin=tab==='login';
+  document.getElementById('form-login').style.display=isLogin?'block':'none';
+  document.getElementById('form-signup').style.display=isLogin?'none':'block';
+  document.getElementById('login-error').classList.remove('visible');
+  const btnL=document.getElementById('tab-login-btn');
+  const btnS=document.getElementById('tab-signup-btn');
+  btnL.style.background=isLogin?'var(--accent)':'transparent';
+  btnL.style.color=isLogin?'white':'var(--muted)';
+  btnS.style.background=isLogin?'transparent':'var(--accent)';
+  btnS.style.color=isLogin?'var(--muted)':'white';
+}
+
+async function submitSignup(){
+  const email=document.getElementById('signup-email').value.trim().toLowerCase();
+  const shopName=document.getElementById('signup-shop').value.trim();
+  const city=document.getElementById('signup-city').value.trim();
+  const err=document.getElementById('login-error');
+  if(!email||!shopName){err.textContent='Email e nome negozio obbligatori.';err.classList.add('visible');return;}
+  const btn=document.getElementById('signup-btn');
+  btn.disabled=true;btn.textContent='Creazione account...';
+  err.classList.remove('visible');
+  try{
+    const res=await fetch('/api/register-vendor',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email,shopName,city})
+    });
+    const data=await res.json();
+    if(!data.success){err.textContent=data.error||'Errore registrazione.';err.classList.add('visible');btn.disabled=false;btn.textContent='Crea account e ottieni la chiave';return;}
+    // Mostra la chiave
+    document.getElementById('signup-key-value').value=data.vendorKey;
+    document.getElementById('signup-key-box').style.display='block';
+    btn.textContent='✓ Account creato — accedi ora';
+    btn.disabled=false;
+    btn.onclick=()=>{
+      document.getElementById('login-email').value=email;
+      document.getElementById('login-token').value=data.vendorKey;
+      showLoginTab('login');
+      submitLogin();
+    };
+  }catch(e){err.textContent='Errore di rete.';err.classList.add('visible');btn.disabled=false;btn.textContent='Crea account e ottieni la chiave';}
+}
+
+function copySignupKey(){
+  const val=document.getElementById('signup-key-value').value;
+  navigator.clipboard.writeText(val).then(()=>showToast('Vendor Key copiata','ok')).catch(()=>{});
+}
+
+async function submitLogin(){
+  const email=document.getElementById('login-email').value.trim().toLowerCase();
+  const token=document.getElementById('login-token').value.trim();
+  if(!email||!token){showLoginError('Inserisci email e Vendor Key.');return;}
+  const btn=document.getElementById('login-btn');
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span> Verifica...';
+  const result=await verifyVendorKey(email,token);
+  if(result.success){
+    await handleLoginSuccess(result);
+  } else {
+    showLoginError(result.error||'Credenziali non valide.');
+    btn.disabled=false;btn.innerHTML='Accedi';
+  }
+}
+function showLoginError(msg){const e=document.getElementById('login-error');e.textContent=msg;e.classList.add('visible');}
+
+// ============================================================
+// TUTORIAL ONBOARDING
+// ============================================================
+const TUT_SEEN_KEY='df_tutorial_seen_v1';
+let tutStep=0;
+
+const TUT_STEPS=[
+  {
+    title:'Benvenuto su Dark Forge Vendor',
+    icon:'🏪',
+    content:`<p style="margin-bottom:14px">Questo tool è il tuo gestionale completo per vendere e comprare carte TCG in fiera e online.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center"><div style="font-size:1.5rem">🃏</div><div style="font-size:.8rem;font-weight:700;margin-top:4px">Magic: The Gathering</div></div>
+      <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center"><div style="font-size:1.5rem">⚡</div><div style="font-size:.8rem;font-weight:700;margin-top:4px">Pokémon TCG</div></div>
+    </div>
+    <p style="margin-top:14px;font-size:.85rem;color:var(--muted)">Questo tutorial ti guida in 8 passi. Puoi riaprirlo in qualsiasi momento con il pulsante <b>?</b> in alto a destra.</p>`
+  },
+  {
+    title:'Login con Vendor Key',
+    icon:'🔑',
+    content:`<p style="margin-bottom:12px">Per accedere ti servono <b>email</b> e <b>Vendor Key</b> — una chiave personale rilasciata da Dark Forge dopo l'autorizzazione.</p>
+    <div style="background:var(--surface2);border-radius:8px;padding:14px;margin-bottom:12px">
+      <div style="font-size:.75rem;font-weight:700;color:var(--muted);margin-bottom:6px">DOVE TROVO LA MIA KEY?</div>
+      <div style="font-size:.85rem">Vai su <b>Dark Forge → Il tuo profilo → Vendor Tools</b> e genera la tua Vendor Key.</div>
+    </div>
+    <div style="background:#e8f4e8;border-radius:8px;padding:12px;font-size:.82rem">
+      ✓ Spunta <b>"Ricordami"</b> al login — il tool si riaprirà automaticamente anche senza internet.
+    </div>`
+  },
+  {
+    title:'Cerca prezzi — MTG & Pokémon',
+    icon:'💰',
+    content:`<p style="margin-bottom:12px">Nella tab <b>Prezzi</b> puoi cercare qualsiasi carta e vedere i prezzi di mercato in tempo reale.</p>
+    <div style="display:grid;gap:8px">
+      <div style="background:var(--surface2);border-radius:8px;padding:10px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:1.2rem">🃏</span>
+        <div><div style="font-weight:700;font-size:.85rem">MTG</div><div style="font-size:.78rem;color:var(--muted)">Prezzi da Scryfall — CardTrader e CardMarket</div></div>
+      </div>
+      <div style="background:var(--surface2);border-radius:8px;padding:10px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:1.2rem">⚡</span>
+        <div><div style="font-weight:700;font-size:.85rem">Pokémon</div><div style="font-size:.78rem;color:var(--muted)">Prezzi da PokéTCG — CardMarket e TCGPlayer</div></div>
+      </div>
+    </div>
+    <p style="margin-top:12px;font-size:.82rem;color:var(--muted)">Seleziona la carta per vedere l'analisi completa e aggiungerla al carrello o all'inventario con un clic.</p>`
+  },
+  {
+    title:'Cassa — Vendi in fiera',
+    icon:'🛒',
+    content:`<p style="margin-bottom:12px">La tab <b>Cassa</b> è ottimizzata per le vendite veloci in fiera.</p>
+    <div style="display:grid;gap:8px;font-size:.85rem">
+      <div style="display:flex;align-items:start;gap:8px"><span style="color:var(--accent);font-weight:700">1.</span><span>Cerca la carta nella barra di ricerca</span></div>
+      <div style="display:flex;align-items:start;gap:8px"><span style="color:var(--accent);font-weight:700">2.</span><span>Cliccala per aggiungerla al carrello — il prezzo si popola automaticamente</span></div>
+      <div style="display:flex;align-items:start;gap:8px"><span style="color:var(--accent);font-weight:700">3.</span><span>Modifica il prezzo se tratti col cliente</span></div>
+      <div style="display:flex;align-items:start;gap:8px"><span style="color:var(--accent);font-weight:700">4.</span><span>Seleziona metodo di pagamento e chiudi la vendita</span></div>
+    </div>
+    <div style="background:#fff3cd;border-radius:8px;padding:10px;margin-top:12px;font-size:.8rem">
+      ⚡ Le vendite registrano e scalano automaticamente le quantità dall'inventario.
+    </div>`
+  },
+  {
+    title:'Inventario — MTG e Pokémon separati',
+    icon:'📦',
+    content:`<p style="margin-bottom:12px">Nella tab <b>Inventario</b> gestisci tutto il tuo stock.</p>
+    <div style="display:grid;gap:8px;font-size:.85rem">
+      <div style="background:var(--surface2);border-radius:8px;padding:10px"><b>Filtri TCG</b> — pulsanti Tutti / 🃏 MTG / ⚡ Pokémon per vedere solo quello che ti serve</div>
+      <div style="background:var(--surface2);border-radius:8px;padding:10px"><b>Badge MTG / PKM</b> — ogni carta mostra il suo TCG di appartenenza</div>
+      <div style="background:var(--surface2);border-radius:8px;padding:10px"><b>Pulsante ● DF</b> — solo per carte MTG. Verde = visibile su Dark Forge, grigio = nascosta</div>
+    </div>
+    <div style="background:#e8f4e8;border-radius:8px;padding:10px;margin-top:10px;font-size:.8rem">
+      ✓ Le carte Pokémon non appaiono mai su Dark Forge — separazione automatica.
+    </div>`
+  },
+  {
+    title:'Dark Forge — Vetrina online',
+    icon:'⚔️',
+    content:`<p style="margin-bottom:12px">Nella tab <b>Dark Forge</b> gestisci cosa è visibile ai clienti nella tua zona.</p>
+    <div style="display:grid;gap:8px;font-size:.85rem">
+      <div style="background:var(--surface2);border-radius:8px;padding:10px">
+        <div style="font-weight:700;margin-bottom:4px">Aggiungi a Dark Forge</div>
+        Cerca una carta nell'inventario MTG e clicca <b>+ Aggiungi a DF</b>
+      </div>
+      <div style="background:var(--surface2);border-radius:8px;padding:10px">
+        <div style="font-weight:700;margin-bottom:4px">Rimuovi da Dark Forge</div>
+        Nella lista "Visibili su Dark Forge" clicca <b>✕ Rimuovi</b>
+      </div>
+    </div>
+    <p style="margin-top:10px;font-size:.8rem;color:var(--muted)">Le modifiche sono istantanee — i clienti su Dark Forge vedono subito il tuo stock aggiornato.</p>`
+  },
+  {
+    title:'Sync piattaforme — MKM & CardTrader',
+    icon:'🔄',
+    content:`<p style="margin-bottom:12px">Nella tab <b>Listing</b> sincronizzi l'inventario con le piattaforme di vendita.</p>
+    <div style="display:grid;gap:8px;font-size:.85rem">
+      <div style="background:var(--surface2);border-radius:8px;padding:10px">
+        <div style="font-weight:700;margin-bottom:4px">📄 Cardmarket (MKM)</div>
+        Scarica il CSV pronto da caricare su MKM → Il mio stock → Importa
+      </div>
+      <div style="background:var(--surface2);border-radius:8px;padding:10px">
+        <div style="font-weight:700;margin-bottom:4px">⚡ CardTrader (API)</div>
+        Inserisci il tuo Bearer Token CT (Account → API) per sincronizzare automaticamente
+      </div>
+    </div>
+    <p style="margin-top:10px;font-size:.8rem;color:var(--muted)">Il token CT viene salvato solo sul tuo dispositivo — non va mai su nessun server.</p>`
+  },
+  {
+    title:'Modalità offline — Perfetta per le fiere',
+    icon:'📡',
+    content:`<p style="margin-bottom:12px">Il tool funziona <b>completamente offline</b> dopo il primo accesso.</p>
+    <div style="display:grid;gap:8px;font-size:.85rem">
+      <div style="background:var(--surface2);border-radius:8px;padding:10px;display:flex;gap:10px"><span>✓</span><span><b>Prima della fiera:</b> accedi con internet, il tool salva tutto localmente</span></div>
+      <div style="background:var(--surface2);border-radius:8px;padding:10px;display:flex;gap:10px"><span>✓</span><span><b>In fiera:</b> apri il tool — funziona senza connessione, prezzi e inventario disponibili</span></div>
+      <div style="background:var(--surface2);border-radius:8px;padding:10px;display:flex;gap:10px"><span>✓</span><span><b>Al ritorno:</b> il badge <span style="background:#fff3cd;padding:0 4px;border-radius:4px">⏳</span> mostra le operazioni in attesa — sync automatico</span></div>
+    </div>
+    <div style="background:var(--accent);border-radius:8px;padding:12px;margin-top:10px;color:white;font-size:.82rem;text-align:center">
+      💡 Installa come app: nel browser clicca <b>⊕ Installa</b> nella barra degli indirizzi
+    </div>`
+  }
+];
+
+function openTutorial(forceStep){
+  tutStep=forceStep||0;
+  document.getElementById('tutorial-overlay').style.display='flex';
+  renderTutStep();
+}
+function closeTutorial(){
+  document.getElementById('tutorial-overlay').style.display='none';
+  try{localStorage.setItem(TUT_SEEN_KEY,'1');}catch(e){}
+}
+function tutNav(dir){
+  tutStep=Math.max(0,Math.min(TUT_STEPS.length-1,tutStep+dir));
+  renderTutStep();
+}
+function renderTutStep(){
+  const s=TUT_STEPS[tutStep];
+  const total=TUT_STEPS.length;
+  document.getElementById('tut-title').textContent=s.title;
+  document.getElementById('tut-step-label').textContent=`Passo ${tutStep+1} di ${total}`;
+  document.getElementById('tut-progress').style.width=((tutStep+1)/total*100)+'%';
+  document.getElementById('tut-content').innerHTML=`
+    <div style="font-size:2.5rem;text-align:center;margin-bottom:16px">${s.icon}</div>
+    ${s.content}`;
+  // Prev button
+  const prev=document.getElementById('tut-prev');
+  prev.style.visibility=tutStep===0?'hidden':'visible';
+  // Next button
+  const next=document.getElementById('tut-next');
+  if(tutStep===total-1){next.textContent='Inizia ✓';next.onclick=closeTutorial;}
+  else{next.textContent='Avanti →';next.onclick=()=>tutNav(1);}
+  // Dots
+  let dots='';
+  TUT_STEPS.forEach((_,i)=>{
+    dots+=`<div onclick="tutStep=${i};renderTutStep()" style="width:7px;height:7px;border-radius:50%;cursor:pointer;background:${i===tutStep?'var(--accent)':'var(--border)'};transition:background .2s"></div>`;
+  });
+  document.getElementById('tut-dots').innerHTML=dots;
+}
+
+const DF_SESSION_KEY='df_vendor_session_v1';
+const SESSION_DAYS=30;
+
+function saveSession(data){
+  if(!document.getElementById('login-remember')?.checked)return;
+  const exp=Date.now()+(SESSION_DAYS*24*60*60*1000);
+  try{localStorage.setItem(DF_SESSION_KEY,JSON.stringify({...data,_localExp:exp}));}catch(e){}
+}
+function loadSession(){
+  try{
+    const raw=localStorage.getItem(DF_SESSION_KEY);
+    if(!raw)return null;
+    const d=JSON.parse(raw);
+    if(!d._localExp||Date.now()>d._localExp){localStorage.removeItem(DF_SESSION_KEY);return null;}
+    // Controlla anch
